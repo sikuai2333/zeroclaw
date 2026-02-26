@@ -1,6 +1,9 @@
 name: Pub Ubuntu Build
 
 on:
+  push:
+    tags:
+      - "v*"
   workflow_dispatch:
     inputs:
       release_ref:
@@ -16,13 +19,28 @@ on:
         options:
           - x86_64-unknown-linux-gnu
           - x86_64-unknown-linux-musl
+      publish_release:
+        description: "Publish GitHub Release with this build asset"
+        required: false
+        default: false
+        type: boolean
+      release_tag:
+        description: "Release tag (required when publish_release=true for manual runs)"
+        required: false
+        default: ""
+        type: string
+      prerelease:
+        description: "Mark release as prerelease"
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
   group: pub-ubuntu-build-${{ github.event.inputs.release_ref || github.ref_name || github.run_id }}
   cancel-in-progress: true
 
 permissions:
-  contents: read
+  contents: write
 
 env:
   CARGO_TERM_COLOR: always
@@ -33,16 +51,49 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 50
     steps:
+      - name: Resolve build context
+        id: vars
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_EVENT_NAME}" == "push" ]]; then
+            release_ref="${GITHUB_REF_NAME}"
+            release_tag="${GITHUB_REF_NAME}"
+            publish_release="true"
+            prerelease="false"
+          else
+            release_ref="${{ github.event.inputs.release_ref || 'main' }}"
+            release_tag="${{ github.event.inputs.release_tag }}"
+            publish_release="${{ github.event.inputs.publish_release || 'false' }}"
+            prerelease="${{ github.event.inputs.prerelease || 'false' }}"
+            if [[ "$publish_release" == "true" && -z "$release_tag" ]]; then
+              echo "::error::release_tag is required when publish_release=true"
+              exit 1
+            fi
+          fi
+          target="${{ github.event.inputs.target || 'x86_64-unknown-linux-gnu' }}"
+          archive="zeroclaw-${target}.tar.gz"
+          checksum="${archive}.sha256"
+          {
+            echo "release_ref=${release_ref}"
+            echo "release_tag=${release_tag}"
+            echo "publish_release=${publish_release}"
+            echo "prerelease=${prerelease}"
+            echo "target=${target}"
+            echo "archive=${archive}"
+            echo "checksum=${checksum}"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
-          ref: ${{ github.event.inputs.release_ref || 'main' }}
+          ref: ${{ steps.vars.outputs.release_ref }}
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7 # stable
         with:
           toolchain: 1.92.0
-          targets: ${{ github.event.inputs.target || 'x86_64-unknown-linux-gnu' }}
+          targets: ${{ steps.vars.outputs.target }}
 
       - name: Restore Rust cache
         uses: useblacksmith/rust-cache@f53e7f127245d2a269b3d90879ccf259876842d5 # v3
@@ -51,14 +102,14 @@ jobs:
           cache-targets: true
 
       - name: Install cross (musl only)
-        if: ${{ github.event.inputs.target == 'x86_64-unknown-linux-musl' }}
+        if: ${{ steps.vars.outputs.target == 'x86_64-unknown-linux-musl' }}
         run: cargo install cross --git https://github.com/cross-rs/cross
 
       - name: Build binary
         shell: bash
         run: |
           set -euo pipefail
-          target="${{ github.event.inputs.target || 'x86_64-unknown-linux-gnu' }}"
+          target="${{ steps.vars.outputs.target }}"
           if [[ "$target" == "x86_64-unknown-linux-musl" ]]; then
             cross build --profile release-fast --locked --target "$target"
           else
@@ -69,26 +120,53 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          target="${{ github.event.inputs.target || 'x86_64-unknown-linux-gnu' }}"
+          target="${{ steps.vars.outputs.target }}"
           bash scripts/ci/check_binary_size.sh "target/${target}/release-fast/zeroclaw" "$target"
 
       - name: Package + checksum
         shell: bash
         run: |
           set -euo pipefail
-          target="${{ github.event.inputs.target || 'x86_64-unknown-linux-gnu' }}"
-          archive="zeroclaw-${target}.tar.gz"
+          target="${{ steps.vars.outputs.target }}"
+          archive="${{ steps.vars.outputs.archive }}"
           cd "target/${target}/release-fast"
           tar czf "../../../${archive}" zeroclaw
           cd -
           sha256sum "${archive}" > "${archive}.sha256"
 
+      - name: Publish GitHub Release
+        id: gh_release
+        if: ${{ steps.vars.outputs.publish_release == 'true' }}
+        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2
+        with:
+          tag_name: ${{ steps.vars.outputs.release_tag }}
+          target_commitish: ${{ steps.vars.outputs.release_ref }}
+          prerelease: ${{ steps.vars.outputs.prerelease == 'true' }}
+          files: |
+            ${{ steps.vars.outputs.archive }}
+            ${{ steps.vars.outputs.checksum }}
+
       - name: Upload artifact
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
-          name: zeroclaw-${{ github.event.inputs.target || 'x86_64-unknown-linux-gnu' }}
+          name: zeroclaw-${{ steps.vars.outputs.target }}
           path: |
-            zeroclaw-${{ github.event.inputs.target || 'x86_64-unknown-linux-gnu' }}.tar.gz
-            zeroclaw-${{ github.event.inputs.target || 'x86_64-unknown-linux-gnu' }}.tar.gz.sha256
+            ${{ steps.vars.outputs.archive }}
+            ${{ steps.vars.outputs.checksum }}
           if-no-files-found: error
           retention-days: 14
+
+      - name: Build summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "### Ubuntu Build Output"
+            echo "- target: \`${{ steps.vars.outputs.target }}\`"
+            echo "- archive: \`${{ steps.vars.outputs.archive }}\`"
+            if [[ "${{ steps.vars.outputs.publish_release }}" == "true" ]]; then
+              echo "- release: ${{ steps.gh_release.outputs.url }}"
+            else
+              echo "- release: (not published, artifact only)"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
