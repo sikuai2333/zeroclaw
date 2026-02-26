@@ -57,7 +57,9 @@ jobs:
         run: |
           set -euo pipefail
           if [[ "${GITHUB_EVENT_NAME}" == "push" ]]; then
-            release_ref="${GITHUB_REF_NAME}"
+            # For tag-push builds, release_tag should be the tag, while
+            # target_commitish must be a branch/SHA (not tag name).
+            release_ref="${GITHUB_SHA}"
             release_tag="${GITHUB_REF_NAME}"
             publish_release="true"
             prerelease="false"
