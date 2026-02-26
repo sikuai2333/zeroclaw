@@ -900,7 +900,7 @@ impl TelegramChannel {
                                 Ok(()) => {
                                     let _ = self
                                         .send(&SendMessage::new(
-                                            "✅ Telegram account bound successfully. You can talk to ZeroClaw now.",
+                                            "✅ Telegram 账号绑定成功，现在可以直接与 ZeroClaw 对话。",
                                             &chat_id,
                                         ))
                                         .await;
@@ -914,7 +914,7 @@ impl TelegramChannel {
                                     );
                                     let _ = self
                                         .send(&SendMessage::new(
-                                            "⚠️ Bound for this runtime, but failed to persist config. Access may be lost after restart; check config file permissions.",
+                                            "⚠️ 已在当前运行时完成绑定，但写入配置失败。重启后可能失效，请检查配置文件权限。",
                                             &chat_id,
                                         ))
                                         .await;
@@ -923,7 +923,7 @@ impl TelegramChannel {
                         } else {
                             let _ = self
                                 .send(&SendMessage::new(
-                                    "❌ Could not identify your Telegram account. Ensure your account has a username or stable user ID, then retry.",
+                                    "❌ 无法识别你的 Telegram 身份。请确认账号有用户名或稳定的数字用户 ID 后重试。",
                                     &chat_id,
                                 ))
                                 .await;
@@ -932,7 +932,7 @@ impl TelegramChannel {
                     Ok(None) => {
                         let _ = self
                             .send(&SendMessage::new(
-                                "❌ Invalid binding code. Ask operator for the latest code and retry.",
+                                "❌ 绑定码无效，请向管理员获取最新绑定码后重试。",
                                 &chat_id,
                             ))
                             .await;
@@ -940,7 +940,7 @@ impl TelegramChannel {
                     Err(lockout_secs) => {
                         let _ = self
                             .send(&SendMessage::new(
-                                format!("⏳ Too many invalid attempts. Retry in {lockout_secs}s."),
+                                format!("⏳ 错误次数过多，请在 {lockout_secs} 秒后重试。"),
                                 &chat_id,
                             ))
                             .await;
@@ -949,7 +949,7 @@ impl TelegramChannel {
             } else {
                 let _ = self
                     .send(&SendMessage::new(
-                        "ℹ️ Telegram pairing is not active. Ask operator to add your user ID to channels.telegram.allowed_users in config.toml.",
+                        "ℹ️ 当前未启用 Telegram 配对。请联系管理员把你的用户 ID 加到 config.toml 的 channels.telegram.allowed_users。",
                         &chat_id,
                     ))
                     .await;
@@ -977,7 +977,7 @@ Allowlist Telegram username (without '@') or numeric user ID.",
         let _ = self
             .send(&SendMessage::new(
                 format!(
-                    "🔐 This bot requires operator approval.\n\nCopy this command to operator terminal:\n`zeroclaw channel bind-telegram {suggested_identity}`\n\nAfter operator runs it, send your message again."
+                    "🔐 当前机器人需要管理员授权。\n\n请把这条命令发给管理员在终端执行：\n`zeroclaw channel bind-telegram {suggested_identity}`\n\n管理员执行后，请再发送一次消息。"
                 ),
                 &chat_id,
             ))
@@ -986,7 +986,7 @@ Allowlist Telegram username (without '@') or numeric user ID.",
         if self.pairing_code_active() {
             let _ = self
                 .send(&SendMessage::new(
-                    "ℹ️ If operator provides a one-time pairing code, you can also run `/bind <code>`.",
+                    "ℹ️ 如果管理员提供了一次性配对码，你也可以使用 `/bind <code>`。",
                     &chat_id,
                 ))
                 .await;
