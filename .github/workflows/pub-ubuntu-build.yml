@@ -1,0 +1,94 @@
+name: Pub Ubuntu Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_ref:
+        description: "Git ref to build (branch, tag, or SHA)"
+        required: false
+        default: "main"
+        type: string
+      target:
+        description: "Rust target triple"
+        required: false
+        default: "x86_64-unknown-linux-gnu"
+        type: choice
+        options:
+          - x86_64-unknown-linux-gnu
+          - x86_64-unknown-linux-musl
+
+concurrency:
+  group: pub-ubuntu-build-${{ github.event.inputs.release_ref || github.ref_name || github.run_id }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Build ${{ github.event.inputs.target || 'x86_64-unknown-linux-gnu' }}
+    runs-on: ubuntu-22.04
+    timeout-minutes: 50
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ github.event.inputs.release_ref || 'main' }}
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7 # stable
+        with:
+          toolchain: 1.92.0
+          targets: ${{ github.event.inputs.target || 'x86_64-unknown-linux-gnu' }}
+
+      - name: Restore Rust cache
+        uses: useblacksmith/rust-cache@f53e7f127245d2a269b3d90879ccf259876842d5 # v3
+        with:
+          prefix-key: pub-ubuntu-build
+          cache-targets: true
+
+      - name: Install cross (musl only)
+        if: ${{ github.event.inputs.target == 'x86_64-unknown-linux-musl' }}
+        run: cargo install cross --git https://github.com/cross-rs/cross
+
+      - name: Build binary
+        shell: bash
+        run: |
+          set -euo pipefail
+          target="${{ github.event.inputs.target || 'x86_64-unknown-linux-gnu' }}"
+          if [[ "$target" == "x86_64-unknown-linux-musl" ]]; then
+            cross build --profile release-fast --locked --target "$target"
+          else
+            cargo build --profile release-fast --locked --target "$target"
+          fi
+
+      - name: Check binary size
+        shell: bash
+        run: |
+          set -euo pipefail
+          target="${{ github.event.inputs.target || 'x86_64-unknown-linux-gnu' }}"
+          bash scripts/ci/check_binary_size.sh "target/${target}/release-fast/zeroclaw" "$target"
+
+      - name: Package + checksum
+        shell: bash
+        run: |
+          set -euo pipefail
+          target="${{ github.event.inputs.target || 'x86_64-unknown-linux-gnu' }}"
+          archive="zeroclaw-${target}.tar.gz"
+          cd "target/${target}/release-fast"
+          tar czf "../../../${archive}" zeroclaw
+          cd -
+          sha256sum "${archive}" > "${archive}.sha256"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: zeroclaw-${{ github.event.inputs.target || 'x86_64-unknown-linux-gnu' }}
+          path: |
+            zeroclaw-${{ github.event.inputs.target || 'x86_64-unknown-linux-gnu' }}.tar.gz
+            zeroclaw-${{ github.event.inputs.target || 'x86_64-unknown-linux-gnu' }}.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 14
