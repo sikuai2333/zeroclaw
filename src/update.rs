@@ -65,7 +65,7 @@ fn run_linux_update(options: UpdateOptions, config: &Config) -> Result<()> {
     };
 
     let client = Client::builder()
-        .timeout(Duration::from_secs(60))
+        .timeout(Duration::from_secs(180))
         .user_agent(format!("zeroclaw-updater/{}", env!("CARGO_PKG_VERSION")))
         .build()
         .context("Failed to build HTTP client")?;
@@ -96,11 +96,33 @@ fn run_linux_update(options: UpdateOptions, config: &Config) -> Result<()> {
             )
         })?;
 
+    let checksum_text = download_text(&client, &checksum_asset.browser_download_url)?;
+    let expected_hash = parse_checksum(&checksum_text, &binary_name)?;
+
+    let exe_path = std::env::current_exe().context("Failed to resolve current executable path")?;
+    let current_hash = sha256_file(&exe_path)?;
+    if options.check_only {
+        if current_hash.eq_ignore_ascii_case(&expected_hash) && !options.force {
+            println!("ℹ️ Current binary already matches latest release asset checksum");
+        } else {
+            println!(
+                "✅ Update available: tag={} repo={} (current hash differs)",
+                release.tag_name, repo
+            );
+        }
+        if let Some(url) = release.html_url.as_deref() {
+            println!("   Release: {url}");
+        }
+        return Ok(());
+    }
+
+    if !options.force && current_hash.eq_ignore_ascii_case(&expected_hash) {
+        println!("ℹ️ Current binary already matches release asset checksum; skip update");
+        return Ok(());
+    }
+
     println!("⬇️  Downloading {}", binary_asset.name);
     let binary_bytes = download_bytes(&client, &binary_asset.browser_download_url)?;
-    let checksum_text = download_text(&client, &checksum_asset.browser_download_url)?;
-
-    let expected_hash = parse_checksum(&checksum_text, &binary_name)?;
     let downloaded_hash = sha256_hex(&binary_bytes);
     if !downloaded_hash.eq_ignore_ascii_case(&expected_hash) {
         bail!(
@@ -110,24 +132,6 @@ fn run_linux_update(options: UpdateOptions, config: &Config) -> Result<()> {
         );
     }
     println!("✅ Binary checksum verified");
-
-    let exe_path = std::env::current_exe().context("Failed to resolve current executable path")?;
-    let current_hash = sha256_file(&exe_path)?;
-    if !options.force && current_hash.eq_ignore_ascii_case(&expected_hash) {
-        println!("ℹ️ Current binary already matches release asset checksum; skip update");
-        return Ok(());
-    }
-
-    if options.check_only {
-        println!(
-            "✅ Update available: tag={} repo={} (current hash differs)",
-            release.tag_name, repo
-        );
-        if let Some(url) = release.html_url.as_deref() {
-            println!("   Release: {url}");
-        }
-        return Ok(());
-    }
 
     if binary_bytes.is_empty() {
         bail!("Downloaded binary is empty");
