@@ -84,6 +84,7 @@ mod skillforge;
 mod skills;
 mod tools;
 mod tunnel;
+mod update;
 mod util;
 
 use config::Config;
@@ -289,6 +290,39 @@ enum Commands {
 
     /// 输出系统状态（完整信息）
     Status,
+
+    /// 更新当前二进制（内建下载、校验、回滚）
+    #[command(long_about = "\
+更新当前 `zeroclaw` 二进制。
+
+默认从 `sikuai2333/zeroclaw` 拉取 GitHub Release，执行：
+1) 下载目标架构压缩包和 `.sha256`
+2) 内建 SHA-256 校验
+3) 原子替换当前二进制
+4) 如启用服务重启且失败，自动回滚旧版本
+
+示例：
+  zeroclaw update
+  zeroclaw update --check-only
+  zeroclaw update --repo sikuai2333/zeroclaw --tag v2026.02.26-zh-build3
+  zeroclaw update --no-restart")]
+    Update {
+        /// 覆盖更新仓库（默认：sikuai2333/zeroclaw）
+        #[arg(long)]
+        repo: Option<String>,
+        /// 指定 release tag（默认 latest）
+        #[arg(long)]
+        tag: Option<String>,
+        /// 仅检查是否可更新，不执行替换
+        #[arg(long)]
+        check_only: bool,
+        /// 更新后不自动重启服务
+        #[arg(long)]
+        no_restart: bool,
+        /// 即使校验发现当前已是同一构建，仍强制覆盖
+        #[arg(long)]
+        force: bool,
+    },
 
     /// 启用、查看和恢复紧急停止（estop）状态。
     ///
@@ -949,6 +983,23 @@ async fn main() -> Result<()> {
             println!("  Boards:    {}", config.peripherals.boards.len());
 
             Ok(())
+        }
+
+        Commands::Update {
+            repo,
+            tag,
+            check_only,
+            no_restart,
+            force,
+        } => {
+            let options = update::UpdateOptions {
+                repo,
+                tag,
+                check_only,
+                restart_service: !no_restart,
+                force,
+            };
+            update::run(options, &config)
         }
 
         Commands::Estop {
