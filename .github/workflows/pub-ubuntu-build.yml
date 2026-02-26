@@ -141,6 +141,7 @@ jobs:
         if: ${{ steps.vars.outputs.publish_release == 'true' }}
         uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2
         with:
+          token: ${{ secrets.GH_RELEASE_TOKEN || github.token }}
           tag_name: ${{ steps.vars.outputs.release_tag }}
           target_commitish: ${{ steps.vars.outputs.release_ref }}
           prerelease: ${{ steps.vars.outputs.prerelease == 'true' }}
