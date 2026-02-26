@@ -11,7 +11,7 @@
 - 中文根 README：[docs/i18n/zh-CN/README.md](README.md)
 - 中文文档入口（兼容路径）：[docs/i18n/zh-CN/README.md](README.md)
 - 中文目录（兼容路径）：[../../SUMMARY.zh-CN.md](../../SUMMARY.zh-CN.md)
-- 英文文档入口：[../../README.md](../../README.md)
+- 英文文档入口：[../../en/README.md](../../en/README.md)
 
 ## Wave 1 本地化运行时文档
 
@@ -43,7 +43,7 @@
 
 ## 其他语言
 
-- English: [../../README.md](../../README.md)
+- English: [../../en/README.md](../../en/README.md)
 - 日本語: [../ja/README.md](../ja/README.md)
 - Русский: [../ru/README.md](../ru/README.md)
 - Français: [../fr/README.md](../fr/README.md)

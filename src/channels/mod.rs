@@ -1233,12 +1233,12 @@ async fn describe_non_cli_approvals(
     );
     let _ = writeln!(
         response,
-        "- Runtime non_cli_natural_language_approval_mode: {}",
+        "- 运行时 non_cli_natural_language_approval_mode：{}",
         default_mode
     );
     let _ = writeln!(
         response,
-        "- Runtime non_cli_natural_language_approval_mode (current channel `{channel}`): {}",
+        "- 运行时 non_cli_natural_language_approval_mode（当前 channel `{channel}`）：{}",
         effective_mode
     );
     let mut mode_overrides = ctx
@@ -1249,11 +1249,11 @@ async fn describe_non_cli_approvals(
         .collect::<Vec<_>>();
     mode_overrides.sort();
     if mode_overrides.is_empty() {
-        response.push_str("- Runtime non_cli_natural_language_approval_mode_by_channel: (none)\n");
+        response.push_str("- 运行时 non_cli_natural_language_approval_mode_by_channel：(无)\n");
     } else {
         let _ = writeln!(
             response,
-            "- Runtime non_cli_natural_language_approval_mode_by_channel: {}",
+            "- 运行时 non_cli_natural_language_approval_mode_by_channel：{}",
             mode_overrides.join(", ")
         );
     }
@@ -1265,9 +1265,9 @@ async fn describe_non_cli_approvals(
     );
     pending_requests.sort_by(|a, b| a.created_at.cmp(&b.created_at));
     if pending_requests.is_empty() {
-        response.push_str("- Pending approvals (sender+chat/channel scoped): (none)\n");
+        response.push_str("- 待确认授权（按发送者+会话范围）：(无)\n");
     } else {
-        response.push_str("- Pending approvals (sender+chat/channel scoped):\n");
+        response.push_str("- 待确认授权（按发送者+会话范围）：\n");
         for req in pending_requests {
             let reason = req
                 .reason
@@ -1276,7 +1276,7 @@ async fn describe_non_cli_approvals(
                 .unwrap_or("n/a");
             let _ = writeln!(
                 response,
-                "  - {}: tool={}, expires_at={}, reason={}",
+                "  - {}：tool={}，expires_at={}，reason={}",
                 req.request_id,
                 approval_target_label(&req.tool_name),
                 req.expires_at,
@@ -1692,34 +1692,34 @@ fn build_models_help_response(current: &ChannelRouteSelection, workspace_dir: &P
     let mut response = String::new();
     let _ = writeln!(
         response,
-        "Current provider: `{}`\nCurrent model: `{}`",
+        "当前 Provider：`{}`\n当前模型：`{}`",
         current.provider, current.model
     );
-    response.push_str("\nSwitch model with `/model <model-id>`.\n");
-    response.push_str("Request supervised tool approval with `/approve-request <tool-name>`.\n");
-    response.push_str("Request one-time all-tools approval with `/approve-all-once`.\n");
-    response.push_str("Confirm approval with `/approve-confirm <request-id>`.\n");
-    response.push_str("List pending requests with `/approve-pending`.\n");
-    response.push_str("Approve supervised tools with `/approve <tool-name>`.\n");
-    response.push_str("Revoke approval with `/unapprove <tool-name>`.\n");
-    response.push_str("List approval state with `/approvals`.\n");
+    response.push_str("\n使用 `/model <model-id>` 切换模型。\n");
+    response.push_str("使用 `/approve-request <tool-name>` 发起受监管工具授权申请。\n");
+    response.push_str("使用 `/approve-all-once` 申请一次性全工具授权。\n");
+    response.push_str("使用 `/approve-confirm <request-id>` 确认授权。\n");
+    response.push_str("使用 `/approve-pending` 查看待确认请求。\n");
+    response.push_str("使用 `/approve <tool-name>` 直接授权受监管工具。\n");
+    response.push_str("使用 `/unapprove <tool-name>` 撤销授权。\n");
+    response.push_str("使用 `/approvals` 查看授权状态。\n");
     response.push_str(
-        "Natural language also works (policy controlled).\n\
-         - `direct` mode (default): `授权工具 shell` grants immediately.\n\
-         - `request_confirm` mode: `授权工具 shell` then `确认授权 apr-xxxxxx`.\n",
+        "也支持自然语言授权（受策略控制）。\n\
+         - `direct` 模式（默认）：`授权工具 shell` 会立即生效。\n\
+         - `request_confirm` 模式：先 `授权工具 shell`，再 `确认授权 apr-xxxxxx`。\n",
     );
 
     let cached_models = load_cached_model_preview(workspace_dir, &current.provider);
     if cached_models.is_empty() {
         let _ = writeln!(
             response,
-            "\nNo cached model list found for `{}`. Ask the operator to run `zeroclaw models refresh --provider {}`.",
+            "\n未找到 `{}` 的模型缓存。请运行 `zeroclaw models refresh --provider {}` 进行刷新。",
             current.provider, current.provider
         );
     } else {
         let _ = writeln!(
             response,
-            "\nCached model IDs (top {}):",
+            "\n已缓存模型 ID（前 {} 条）：",
             cached_models.len()
         );
         for model in cached_models {
@@ -1734,24 +1734,24 @@ fn build_providers_help_response(current: &ChannelRouteSelection) -> String {
     let mut response = String::new();
     let _ = writeln!(
         response,
-        "Current provider: `{}`\nCurrent model: `{}`",
+        "当前 Provider：`{}`\n当前模型：`{}`",
         current.provider, current.model
     );
-    response.push_str("\nSwitch provider with `/models <provider>`.\n");
-    response.push_str("Switch model with `/model <model-id>`.\n\n");
-    response.push_str("Request supervised tool approval with `/approve-request <tool-name>`.\n");
-    response.push_str("Request one-time all-tools approval with `/approve-all-once`.\n");
-    response.push_str("Confirm approval with `/approve-confirm <request-id>`.\n");
-    response.push_str("List pending requests with `/approve-pending`.\n");
-    response.push_str("Approve supervised tools with `/approve <tool-name>`.\n");
-    response.push_str("Revoke approval with `/unapprove <tool-name>`.\n");
-    response.push_str("List approval state with `/approvals`.\n");
+    response.push_str("\n使用 `/models <provider>` 切换 Provider。\n");
+    response.push_str("使用 `/model <model-id>` 切换模型。\n\n");
+    response.push_str("使用 `/approve-request <tool-name>` 发起受监管工具授权申请。\n");
+    response.push_str("使用 `/approve-all-once` 申请一次性全工具授权。\n");
+    response.push_str("使用 `/approve-confirm <request-id>` 确认授权。\n");
+    response.push_str("使用 `/approve-pending` 查看待确认请求。\n");
+    response.push_str("使用 `/approve <tool-name>` 直接授权受监管工具。\n");
+    response.push_str("使用 `/unapprove <tool-name>` 撤销授权。\n");
+    response.push_str("使用 `/approvals` 查看授权状态。\n");
     response.push_str(
-        "Natural language also works (policy controlled).\n\
-         - `direct` mode (default): `授权工具 shell` grants immediately.\n\
-         - `request_confirm` mode: `授权工具 shell` then `确认授权 apr-xxxxxx`.\n\n",
+        "也支持自然语言授权（受策略控制）。\n\
+         - `direct` 模式（默认）：`授权工具 shell` 会立即生效。\n\
+         - `request_confirm` 模式：先 `授权工具 shell`，再 `确认授权 apr-xxxxxx`。\n\n",
     );
-    response.push_str("Available providers:\n");
+    response.push_str("可用 Provider 列表：\n");
     for provider in providers::list_providers() {
         if provider.aliases.is_empty() {
             let _ = writeln!(response, "- {}", provider.name);
@@ -1841,7 +1841,7 @@ async fn handle_runtime_command_if_needed(
             .non_cli_natural_language_approval_mode_for_channel(source_channel);
         match mode {
             NonCliNaturalLanguageApprovalMode::Disabled => {
-                let response = "Natural-language approval commands are disabled by runtime policy.\nUse explicit slash commands such as `/approve <tool-name>`, `/approve-request <tool-name>`, `/approve-all-once`, `/approve-confirm <request-id>`, `/unapprove <tool-name>`, and `/approvals`.".to_string();
+                let response = "运行时策略已禁用“自然语言授权命令”。\n请改用显式斜杠命令：`/approve <tool-name>`、`/approve-request <tool-name>`、`/approve-all-once`、`/approve-confirm <request-id>`、`/unapprove <tool-name>`、`/approvals`。".to_string();
                 runtime_trace::record_event(
                     "approval_management_natural_language_denied",
                     Some(source_channel),
@@ -1906,19 +1906,19 @@ async fn handle_runtime_command_if_needed(
                         }
 
                         format!(
-                            "Provider switched to `{provider_name}` for this sender session. Current model is `{}`.\nUse `/model <model-id>` to set a provider-compatible model.",
+                            "当前会话已切换到 Provider `{provider_name}`。当前模型：`{}`。\n可使用 `/model <model-id>` 切换为该 Provider 可用模型。",
                             current.model
                         )
                     }
                     Err(err) => {
                         let safe_err = providers::sanitize_api_error(&err.to_string());
                         format!(
-                            "Failed to initialize provider `{provider_name}`. Route unchanged.\nDetails: {safe_err}"
+                            "初始化 Provider `{provider_name}` 失败，路由保持不变。\n详情：{safe_err}"
                         )
                     }
                 },
                 None => format!(
-                    "Unknown provider `{raw_provider}`. Use `/models` to list valid providers."
+                    "未知 Provider：`{raw_provider}`。请使用 `/models` 查看可用列表。"
                 ),
             }
         }
@@ -1928,21 +1928,21 @@ async fn handle_runtime_command_if_needed(
         ChannelRuntimeCommand::SetModel(raw_model) => {
             let model = raw_model.trim().trim_matches('`').to_string();
             if model.is_empty() {
-                "Model ID cannot be empty. Use `/model <model-id>`.".to_string()
+                "模型 ID 不能为空。用法：`/model <model-id>`。".to_string()
             } else {
                 current.model = model.clone();
                 set_route_selection(ctx, &sender_key, current.clone());
                 clear_sender_history(ctx, &sender_key);
 
                 format!(
-                    "Model switched to `{model}` for provider `{}` in this sender session.",
+                    "当前会话已切换模型为 `{model}`（Provider：`{}`）。",
                     current.provider
                 )
             }
         }
         ChannelRuntimeCommand::NewSession => {
             clear_sender_history(ctx, &sender_key);
-            "Conversation history cleared. Starting fresh.".to_string()
+            "已清空会话历史，开始新会话。".to_string()
         }
         ChannelRuntimeCommand::RequestAllToolsOnce => {
             let req = ctx.approval_manager.create_non_cli_pending_request(
@@ -1969,14 +1969,14 @@ async fn handle_runtime_command_if_needed(
                 }),
             );
             format!(
-                "One-time all-tools approval request created.\nRequest ID: `{}`\nScope: next non-CLI agent tool-execution turn may run without per-tool approval prompts.\nExpires: `{}`\nConfirm with `/approve-confirm {}` (must be the same sender in this chat/channel).",
+                "已创建一次性全工具授权请求。\n请求 ID：`{}`\n作用范围：仅下一次非 CLI Agent 工具执行可跳过逐工具授权。\n过期时间：`{}`\n请使用 `/approve-confirm {}` 确认（必须由同一发送者在同一会话确认）。",
                 req.request_id, req.expires_at, req.request_id
             )
         }
         ChannelRuntimeCommand::RequestToolApproval(raw_tool_name) => {
             let tool_name = raw_tool_name.trim().to_string();
             if tool_name.is_empty() {
-                "Usage: `/approve-request <tool-name>`".to_string()
+                "用法：`/approve-request <tool-name>`".to_string()
             } else if !ctx
                 .tools_registry
                 .iter()
@@ -1994,11 +1994,11 @@ async fn handle_runtime_command_if_needed(
                     .collect::<Vec<_>>()
                     .join(", ");
                 format!(
-                    "Unknown tool `{tool_name}`.\nKnown tools (top 12): {preview}\nUse `/approve-request <tool-name>` with an exact tool name."
+                    "未知工具：`{tool_name}`。\n已知工具（前 12 项）：{preview}\n请使用精确工具名：`/approve-request <tool-name>`。"
                 )
             } else if !ctx.approval_manager.needs_approval(&tool_name) {
                 format!(
-                    "`{tool_name}` is already approved in the current runtime policy. You can use it directly."
+                    "`{tool_name}` 在当前运行时策略中已授权，可直接使用。"
                 )
             } else {
                 let req = ctx.approval_manager.create_non_cli_pending_request(
@@ -2025,7 +2025,7 @@ async fn handle_runtime_command_if_needed(
                     }),
                 );
                 format!(
-                    "Approval request created.\nRequest ID: `{}`\nTool: `{}`\nExpires: `{}`\nConfirm with `/approve-confirm {}` (must be the same sender in this chat/channel).",
+                    "已创建授权请求。\n请求 ID：`{}`\n工具：`{}`\n过期时间：`{}`\n请使用 `/approve-confirm {}` 确认（必须由同一发送者在同一会话确认）。",
                     req.request_id, req.tool_name, req.expires_at, req.request_id
                 )
             }
@@ -2033,7 +2033,7 @@ async fn handle_runtime_command_if_needed(
         ChannelRuntimeCommand::ConfirmToolApproval(raw_request_id) => {
             let request_id = raw_request_id.trim().to_string();
             if request_id.is_empty() {
-                "Usage: `/approve-confirm <request-id>`".to_string()
+                "用法：`/approve-confirm <request-id>`".to_string()
             } else {
                 match ctx.approval_manager.confirm_non_cli_pending_request(
                     &request_id,
@@ -2046,7 +2046,7 @@ async fn handle_runtime_command_if_needed(
                         let approval_message = if tool_name == APPROVAL_ALL_TOOLS_ONCE_TOKEN {
                             let remaining = ctx.approval_manager.grant_non_cli_allow_all_once();
                             format!(
-                                "Approved one-time all-tools bypass from request `{request_id}`.\nApplies to the next non-CLI agent tool-execution turn only.\nThis bypass is runtime-only and does not persist to config.\nChannel exclusions from `autonomy.non_cli_excluded_tools` still apply.\nQueued one-time all-tools bypass tokens: `{remaining}`."
+                                "已确认请求 `{request_id}` 的一次性全工具跳过授权。\n仅作用于下一次非 CLI Agent 工具执行。\n该授权仅在当前运行时有效，不会写入配置。\n`autonomy.non_cli_excluded_tools` 的排除规则仍然生效。\n当前排队的一次性全工具授权令牌数：`{remaining}`。"
                             )
                         } else {
                             ctx.approval_manager.grant_non_cli_session(&tool_name);
@@ -2054,14 +2054,14 @@ async fn handle_runtime_command_if_needed(
                                 .apply_persistent_runtime_grant(&tool_name);
                             match persist_non_cli_approval_to_config(ctx, &tool_name).await {
                                 Ok(Some(path)) => format!(
-                                    "Approved supervised execution for `{tool_name}` from request `{request_id}`.\nPersisted to `{}` so future channel sessions (including after restart) remain approved.",
+                                    "已根据请求 `{request_id}` 授权 `{tool_name}`。\n已持久化到 `{}`，后续会话（含重启后）仍保持授权。",
                                     path.display()
                                 ),
                                 Ok(None) => format!(
-                                    "Approved supervised execution for `{tool_name}` from request `{request_id}`.\nNo runtime config path was found, so this approval is active for the current daemon runtime only."
+                                    "已根据请求 `{request_id}` 授权 `{tool_name}`。\n未找到可写配置路径，因此该授权仅在当前 daemon 运行期有效。"
                                 ),
                                 Err(err) => format!(
-                                    "Approved supervised execution for `{tool_name}` from request `{request_id}` in-memory.\nFailed to persist this approval to config: {err}"
+                                    "已在内存中根据请求 `{request_id}` 授权 `{tool_name}`。\n写入配置失败：{err}"
                                 ),
                             }
                         };
@@ -2107,7 +2107,7 @@ async fn handle_runtime_command_if_needed(
                             }),
                         );
                         format!(
-                            "Pending approval request `{request_id}` was not found. Create one with `/approve-request <tool-name>` or `/approve-all-once`."
+                            "未找到待确认请求 `{request_id}`。请先用 `/approve-request <tool-name>` 或 `/approve-all-once` 创建请求。"
                         )
                     }
                     Err(PendingApprovalError::Expired) => {
@@ -2125,7 +2125,7 @@ async fn handle_runtime_command_if_needed(
                                 "channel": source_channel,
                             }),
                         );
-                        format!("Pending approval request `{request_id}` has expired.")
+                        format!("待确认请求 `{request_id}` 已过期。")
                     }
                     Err(PendingApprovalError::RequesterMismatch) => {
                         runtime_trace::record_event(
@@ -2143,7 +2143,7 @@ async fn handle_runtime_command_if_needed(
                             }),
                         );
                         format!(
-                            "Pending approval request `{request_id}` can only be confirmed by the same sender in the same chat/channel that created it."
+                            "待确认请求 `{request_id}` 只能由创建它的同一发送者在同一会话内确认。"
                         )
                     }
                 }
@@ -2156,11 +2156,11 @@ async fn handle_runtime_command_if_needed(
                 Some(reply_target),
             );
             if rows.is_empty() {
-                "No pending approval requests for your current sender+chat/channel scope."
+                "当前发送者与会话范围内没有待确认授权请求。"
                     .to_string()
             } else {
                 let mut response = String::new();
-                response.push_str("Pending approval requests (sender+chat/channel scoped):\n");
+                response.push_str("待确认授权请求（按发送者+会话范围）：\n");
                 for req in rows {
                     let reason = req
                         .reason
@@ -2182,7 +2182,7 @@ async fn handle_runtime_command_if_needed(
         ChannelRuntimeCommand::ApproveTool(raw_tool_name) => {
             let tool_name = raw_tool_name.trim().to_string();
             if tool_name.is_empty() {
-                "Usage: `/approve <tool-name>`".to_string()
+                "用法：`/approve <tool-name>`".to_string()
             } else if !ctx
                 .tools_registry
                 .iter()
@@ -2200,7 +2200,7 @@ async fn handle_runtime_command_if_needed(
                     .collect::<Vec<_>>()
                     .join(", ");
                 format!(
-                    "Unknown tool `{tool_name}`.\nKnown tools (top 12): {preview}\nUse `/approve <tool-name>` with an exact tool name."
+                    "未知工具：`{tool_name}`。\n已知工具（前 12 项）：{preview}\n请使用精确工具名：`/approve <tool-name>`。"
                 )
             } else {
                 let cleared_pending = ctx
@@ -2211,30 +2211,30 @@ async fn handle_runtime_command_if_needed(
                     .apply_persistent_runtime_grant(&tool_name);
                 let persistence_message = match persist_non_cli_approval_to_config(ctx, &tool_name).await {
                     Ok(Some(path)) => format!(
-                        "Approved supervised execution for `{tool_name}`.\nPersisted to `{}` so future channel sessions (including after restart) remain approved.",
+                        "已授权 `{tool_name}`。\n已持久化到 `{}`，后续会话（含重启后）仍保持授权。",
                         path.display()
                     ),
                     Ok(None) => format!(
-                        "Approved supervised execution for `{tool_name}`.\nNo runtime config path was found, so this approval is active for the current daemon runtime only."
+                        "已授权 `{tool_name}`。\n未找到可写配置路径，因此该授权仅在当前 daemon 运行期有效。"
                     ),
                     Err(err) => format!(
-                        "Approved supervised execution for `{tool_name}` in-memory.\nFailed to persist this approval to config: {err}"
+                        "已在内存中授权 `{tool_name}`。\n写入配置失败：{err}"
                     ),
                 };
 
                 if is_non_cli_tool_excluded(ctx, &tool_name) {
                     format!(
-                        "{persistence_message}\nRuntime pending requests cleared: {cleared_pending}.\nNote: `{tool_name}` is currently listed in `autonomy.non_cli_excluded_tools` for this runtime. Remove it from config; the channel runtime auto-reloads this list from disk."
+                        "{persistence_message}\n已清理运行时待确认请求：{cleared_pending}。\n注意：`{tool_name}` 目前仍在 `autonomy.non_cli_excluded_tools` 中。请在配置中移除；channel 运行时会自动热加载。"
                     )
                 } else {
-                    format!("{persistence_message}\nRuntime pending requests cleared: {cleared_pending}.")
+                    format!("{persistence_message}\n已清理运行时待确认请求：{cleared_pending}。")
                 }
             }
         }
         ChannelRuntimeCommand::UnapproveTool(raw_tool_name) => {
             let tool_name = raw_tool_name.trim().to_string();
             if tool_name.is_empty() {
-                "Usage: `/unapprove <tool-name>`".to_string()
+                "用法：`/unapprove <tool-name>`".to_string()
             } else {
                 let removed_session = ctx.approval_manager.revoke_non_cli_session(&tool_name);
                 let removed_runtime_persistent = ctx
@@ -2245,7 +2245,7 @@ async fn handle_runtime_command_if_needed(
                     .clear_non_cli_pending_requests_for_tool(&tool_name);
                 match remove_non_cli_approval_from_config(ctx, &tool_name).await {
                     Ok(Some((path, removed_persistent))) => format!(
-                        "Persistent approval removed for `{tool_name}`: {}.\nRuntime effective auto_approve removed: {}.\nRuntime pending requests cleared: {}.\nConfig path: `{}`.\nRuntime session grant removed: {}.",
+                        "已移除 `{tool_name}` 的持久化授权：{}。\n已移除运行时 auto_approve：{}。\n已清理运行时待确认请求：{}。\n配置路径：`{}`。\n已移除运行时会话授权：{}。",
                         if removed_persistent { "yes" } else { "no (not present)" },
                         if removed_runtime_persistent { "yes" } else { "no (not present)" },
                         removed_pending,
@@ -2253,11 +2253,11 @@ async fn handle_runtime_command_if_needed(
                         if removed_session { "yes" } else { "no" }
                     ),
                     Ok(None) => format!(
-                        "Runtime config path was not found.\nRuntime session grant removed for `{tool_name}`: {}.",
+                        "未找到运行时配置路径。\n已移除 `{tool_name}` 的运行时会话授权：{}。",
                         if removed_session { "yes" } else { "no" }
                     ),
                     Err(err) => format!(
-                        "Removed runtime session grant for `{tool_name}`: {}.\nFailed to persist removal to config: {err}",
+                        "已移除 `{tool_name}` 的运行时会话授权：{}。\n写入配置失败：{err}",
                         if removed_session { "yes" } else { "no" }
                     ),
                 }
@@ -2266,7 +2266,7 @@ async fn handle_runtime_command_if_needed(
         ChannelRuntimeCommand::ListApprovals => {
             match describe_non_cli_approvals(ctx, sender, source_channel, reply_target).await {
                 Ok(summary) => summary,
-                Err(err) => format!("Failed to read approval state: {err}"),
+                Err(err) => format!("读取授权状态失败：{err}"),
             }
         }
     };
@@ -2776,7 +2776,7 @@ async fn process_channel_message(
         Err(err) => {
             let safe_err = providers::sanitize_api_error(&err.to_string());
             let message = format!(
-                "⚠️ Failed to initialize provider `{}`. Please run `/models` to choose another provider.\nDetails: {safe_err}",
+                "⚠️ 初始化 Provider `{}` 失败。请运行 `/models` 选择其他 Provider。\n详情：{safe_err}",
                 route.provider
             );
             if let Some(channel) = target_channel.as_ref() {

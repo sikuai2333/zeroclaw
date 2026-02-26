@@ -75,378 +75,370 @@ pub(crate) mod util;
 
 pub use config::Config;
 
-/// Service management subcommands
+/// 服务管理子命令
 #[derive(Subcommand, Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum ServiceCommands {
-    /// Install daemon service unit for auto-start and restart
+    /// 安装 daemon 服务单元（用于自启动与自动重启）
     Install,
-    /// Start daemon service
+    /// 启动 daemon 服务
     Start,
-    /// Stop daemon service
+    /// 停止 daemon 服务
     Stop,
-    /// Restart daemon service to apply latest config
+    /// 重启 daemon 服务并应用最新配置
     Restart,
-    /// Check daemon service status
+    /// 查看 daemon 服务状态
     Status,
-    /// Uninstall daemon service unit
+    /// 卸载 daemon 服务单元
     Uninstall,
 }
 
-/// Channel management subcommands
+/// Channel 管理子命令
 #[derive(Subcommand, Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum ChannelCommands {
-    /// List all configured channels
+    /// 列出所有已配置 channels
     List,
-    /// Start all configured channels (handled in main.rs for async)
+    /// 启动所有已配置 channels（异步逻辑在 main.rs）
     Start,
-    /// Run health checks for configured channels (handled in main.rs for async)
+    /// 对已配置 channels 运行健康检查（异步逻辑在 main.rs）
     Doctor,
-    /// Add a new channel configuration
+    /// 添加新的 channel 配置
     #[command(long_about = "\
-Add a new channel configuration.
+添加新的 channel 配置。
 
-Provide the channel type and a JSON object with the required \
-configuration keys for that channel type.
+传入 channel 类型以及该类型所需配置键的 JSON 对象。
 
-Supported types: telegram, discord, slack, whatsapp, matrix, imessage, email.
+支持类型：telegram、discord、slack、whatsapp、matrix、imessage、email。
 
-Examples:
+示例：
   zeroclaw channel add telegram '{\"bot_token\":\"...\",\"name\":\"my-bot\"}'
   zeroclaw channel add discord '{\"bot_token\":\"...\",\"name\":\"my-discord\"}'")]
     Add {
-        /// Channel type (telegram, discord, slack, whatsapp, matrix, imessage, email)
+        /// Channel 类型（telegram, discord, slack, whatsapp, matrix, imessage, email）
         channel_type: String,
-        /// Optional configuration as JSON
+        /// JSON 格式配置
         config: String,
     },
-    /// Remove a channel configuration
+    /// 移除 channel 配置
     Remove {
-        /// Channel name to remove
+        /// 待移除的 channel 名称
         name: String,
     },
-    /// Bind a Telegram identity (username or numeric user ID) into allowlist
+    /// 将 Telegram 身份（用户名或数字 ID）加入 allowlist
     #[command(long_about = "\
-Bind a Telegram identity into the allowlist.
+将 Telegram 身份加入 allowlist。
 
-Adds a Telegram username (without the '@' prefix) or numeric user \
-ID to the channel allowlist so the agent will respond to messages \
-from that identity.
+支持 Telegram 用户名（不含 '@'）或数字用户 ID。\
+加入后 agent 会响应该身份发送的消息。
 
-Examples:
+示例：
   zeroclaw channel bind-telegram zeroclaw_user
   zeroclaw channel bind-telegram 123456789")]
     BindTelegram {
-        /// Telegram identity to allow (username without '@' or numeric user ID)
+        /// 允许的 Telegram 身份（用户名不含 '@'，或数字用户 ID）
         identity: String,
     },
 }
 
-/// Skills management subcommands
+/// Skills 管理子命令
 #[derive(Subcommand, Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum SkillCommands {
-    /// List all installed skills
+    /// 列出所有已安装 skills
     List,
-    /// Audit a skill source directory or installed skill name
+    /// 审计 skill 源目录或已安装 skill 名称
     Audit {
-        /// Skill path or installed skill name
+        /// Skill 路径或已安装 skill 名称
         source: String,
     },
-    /// Install a new skill from a URL or local path
+    /// 从 URL 或本地路径安装 skill
     Install {
-        /// Source URL or local path
+        /// 来源 URL 或本地路径
         source: String,
     },
-    /// Remove an installed skill
+    /// 移除已安装 skill
     Remove {
-        /// Skill name to remove
+        /// 待移除 skill 名称
         name: String,
     },
 }
 
-/// Migration subcommands
+/// 迁移子命令
 #[derive(Subcommand, Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum MigrateCommands {
-    /// Import memory from an `OpenClaw` workspace into this `ZeroClaw` workspace
+    /// 从 `OpenClaw` 工作区导入 memory 到当前 `ZeroClaw` 工作区
     Openclaw {
-        /// Optional path to `OpenClaw` workspace (defaults to ~/.openclaw/workspace)
+        /// `OpenClaw` 工作区路径（默认 ~/.openclaw/workspace）
         #[arg(long)]
         source: Option<std::path::PathBuf>,
 
-        /// Validate and preview migration without writing any data
+        /// 仅校验与预览，不写入数据
         #[arg(long)]
         dry_run: bool,
     },
 }
 
-/// Cron subcommands
+/// Cron 子命令
 #[derive(Subcommand, Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum CronCommands {
-    /// List all scheduled tasks
+    /// 列出所有计划任务
     List,
-    /// Add a new scheduled task
+    /// 添加新的计划任务
     #[command(long_about = "\
-Add a new recurring scheduled task.
+添加新的周期计划任务。
 
-Uses standard 5-field cron syntax: 'min hour day month weekday'. \
-Times are evaluated in UTC by default; use --tz with an IANA \
-timezone name to override.
+使用标准 5 字段 cron 语法：`min hour day month weekday`。\
+默认按 UTC 计算；可通过 --tz 指定 IANA 时区覆盖。
 
-Examples:
+示例：
   zeroclaw cron add '0 9 * * 1-5' 'Good morning' --tz America/New_York
   zeroclaw cron add '*/30 * * * *' 'Check system health'")]
     Add {
-        /// Cron expression
+        /// Cron 表达式
         expression: String,
-        /// Optional IANA timezone (e.g. America/Los_Angeles)
+        /// IANA 时区（例如 America/Los_Angeles）
         #[arg(long)]
         tz: Option<String>,
-        /// Command to run
+        /// 要执行的命令
         command: String,
     },
-    /// Add a one-shot scheduled task at an RFC3339 timestamp
+    /// 按 RFC3339 时间戳添加一次性任务
     #[command(long_about = "\
-Add a one-shot task that fires at a specific UTC timestamp.
+添加在指定 UTC 时间触发的一次性任务。
 
-The timestamp must be in RFC 3339 format (e.g. 2025-01-15T14:00:00Z).
+时间戳必须使用 RFC 3339 格式（如 2025-01-15T14:00:00Z）。
 
-Examples:
+示例：
   zeroclaw cron add-at 2025-01-15T14:00:00Z 'Send reminder'
   zeroclaw cron add-at 2025-12-31T23:59:00Z 'Happy New Year!'")]
     AddAt {
-        /// One-shot timestamp in RFC3339 format
+        /// RFC3339 格式时间戳
         at: String,
-        /// Command to run
+        /// 要执行的命令
         command: String,
     },
-    /// Add a fixed-interval scheduled task
+    /// 添加固定间隔任务
     #[command(long_about = "\
-Add a task that repeats at a fixed interval.
+添加按固定间隔重复执行的任务。
 
-Interval is specified in milliseconds. For example, 60000 = 1 minute.
+间隔单位为毫秒，例如 60000 = 1 分钟。
 
-Examples:
+示例：
   zeroclaw cron add-every 60000 'Ping heartbeat'     # every minute
   zeroclaw cron add-every 3600000 'Hourly report'    # every hour")]
     AddEvery {
-        /// Interval in milliseconds
+        /// 间隔（毫秒）
         every_ms: u64,
-        /// Command to run
+        /// 要执行的命令
         command: String,
     },
-    /// Add a one-shot delayed task (e.g. "30m", "2h", "1d")
+    /// 添加一次性延迟任务（如 "30m"、"2h"、"1d"）
     #[command(long_about = "\
-Add a one-shot task that fires after a delay from now.
+添加“从现在起延迟触发”的一次性任务。
 
-Accepts human-readable durations: s (seconds), m (minutes), \
-h (hours), d (days).
+支持可读时长：s（秒）、m（分）、h（时）、d（天）。
 
-Examples:
+示例：
   zeroclaw cron once 30m 'Run backup in 30 minutes'
   zeroclaw cron once 2h 'Follow up on deployment'
   zeroclaw cron once 1d 'Daily check'")]
     Once {
-        /// Delay duration
+        /// 延迟时长
         delay: String,
-        /// Command to run
+        /// 要执行的命令
         command: String,
     },
-    /// Remove a scheduled task
+    /// 删除计划任务
     Remove {
-        /// Task ID
+        /// 任务 ID
         id: String,
     },
-    /// Update a scheduled task
+    /// 更新计划任务
     #[command(long_about = "\
-Update one or more fields of an existing scheduled task.
+更新已有任务的一个或多个字段。
 
-Only the fields you specify are changed; others remain unchanged.
+仅会修改你指定的字段，其他字段保持不变。
 
-Examples:
+示例：
   zeroclaw cron update <task-id> --expression '0 8 * * *'
   zeroclaw cron update <task-id> --tz Europe/London --name 'Morning check'
   zeroclaw cron update <task-id> --command 'Updated message'")]
     Update {
-        /// Task ID
+        /// 任务 ID
         id: String,
-        /// New cron expression
+        /// 新 cron 表达式
         #[arg(long)]
         expression: Option<String>,
-        /// New IANA timezone
+        /// 新 IANA 时区
         #[arg(long)]
         tz: Option<String>,
-        /// New command to run
+        /// 新执行命令
         #[arg(long)]
         command: Option<String>,
-        /// New job name
+        /// 新任务名称
         #[arg(long)]
         name: Option<String>,
     },
-    /// Pause a scheduled task
+    /// 暂停任务
     Pause {
-        /// Task ID
+        /// 任务 ID
         id: String,
     },
-    /// Resume a paused task
+    /// 恢复已暂停任务
     Resume {
-        /// Task ID
+        /// 任务 ID
         id: String,
     },
 }
 
-/// Memory management subcommands
+/// Memory 管理子命令
 #[derive(Subcommand, Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum MemoryCommands {
-    /// List memory entries with optional filters
+    /// 列出 memory 条目（可选过滤）
     List {
-        /// Filter by category (core, daily, conversation, or custom name)
+        /// 按 category 过滤（core、daily、conversation 或自定义）
         #[arg(long)]
         category: Option<String>,
-        /// Filter by session ID
+        /// 按 session ID 过滤
         #[arg(long)]
         session: Option<String>,
-        /// Maximum number of entries to display
+        /// 最大显示条目数
         #[arg(long, default_value = "50")]
         limit: usize,
-        /// Number of entries to skip (for pagination)
+        /// 跳过条目数（分页）
         #[arg(long, default_value = "0")]
         offset: usize,
     },
-    /// Get a specific memory entry by key
+    /// 按 key 获取单条 memory
     Get {
-        /// Memory key to look up
+        /// 待查询的 memory key
         key: String,
     },
-    /// Show memory backend statistics and health
+    /// 查看 memory backend 统计与健康状态
     Stats,
-    /// Clear memories by category, by key, or clear all
+    /// 按 category / key 清理 memory，或全部清理
     Clear {
-        /// Delete a single entry by key (supports prefix match)
+        /// 按 key 删除单条（支持前缀匹配）
         #[arg(long)]
         key: Option<String>,
-        /// Only clear entries in this category
+        /// 仅清理指定 category
         #[arg(long)]
         category: Option<String>,
-        /// Skip confirmation prompt
+        /// 跳过确认提示
         #[arg(long)]
         yes: bool,
     },
 }
 
-/// Integration subcommands
+/// Integration 子命令
 #[derive(Subcommand, Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum IntegrationCommands {
-    /// List all integrations (optionally filter by category or status)
+    /// 列出所有 integrations（可按 category/status 过滤）
     List {
-        /// Filter by category (e.g. "chat", "ai", "productivity")
+        /// 按 category 过滤（如 "chat"、"ai"、"productivity"）
         #[arg(long, short)]
         category: Option<String>,
-        /// Filter by status: active, available, coming-soon
+        /// 按状态过滤：active、available、coming-soon
         #[arg(long, short)]
         status: Option<String>,
     },
-    /// Search integrations by keyword (matches name and description)
+    /// 按关键字搜索 integrations（匹配名称和描述）
     Search {
-        /// Search query
+        /// 搜索关键词
         query: String,
     },
-    /// Show details about a specific integration
+    /// 查看指定 integration 详情
     Info {
-        /// Integration name
+        /// Integration 名称
         name: String,
     },
 }
 
-/// Hardware discovery subcommands
+/// 硬件发现子命令
 #[derive(Subcommand, Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum HardwareCommands {
-    /// Enumerate USB devices (VID/PID) and show known boards
+    /// 枚举 USB 设备（VID/PID）并识别已知开发板
     #[command(long_about = "\
-Enumerate USB devices and show known boards.
+枚举 USB 设备并显示已知开发板。
 
-Scans connected USB devices by VID/PID and matches them against \
-known development boards (STM32 Nucleo, Arduino, ESP32).
+按 VID/PID 扫描已连接 USB 设备，并匹配常见开发板 \
+（STM32 Nucleo、Arduino、ESP32）。
 
-Examples:
+示例：
   zeroclaw hardware discover")]
     Discover,
-    /// Introspect a device by path (e.g. /dev/ttyACM0)
+    /// 按路径探测设备（例如 /dev/ttyACM0）
     #[command(long_about = "\
-Introspect a device by its serial or device path.
+按串口或设备路径探测设备。
 
-Opens the specified device path and queries for board information, \
-firmware version, and supported capabilities.
+打开指定设备路径并查询板卡信息、固件版本与支持能力。
 
-Examples:
+示例：
   zeroclaw hardware introspect /dev/ttyACM0
   zeroclaw hardware introspect COM3")]
     Introspect {
-        /// Serial or device path
+        /// 串口或设备路径
         path: String,
     },
-    /// Get chip info via USB (probe-rs over ST-Link). No firmware needed on target.
+    /// 通过 USB 获取芯片信息（probe-rs over ST-Link，无需目标板固件）
     #[command(long_about = "\
-Get chip info via USB using probe-rs over ST-Link.
+通过 USB 使用 probe-rs（ST-Link）读取芯片信息。
 
-Queries the target MCU directly through the debug probe without \
-requiring any firmware on the target board.
+通过调试探针直接访问目标 MCU，无需在目标板上预刷固件。
 
-Examples:
+示例：
   zeroclaw hardware info
   zeroclaw hardware info --chip STM32F401RETx")]
     Info {
-        /// Chip name (e.g. STM32F401RETx). Default: STM32F401RETx for Nucleo-F401RE
+        /// 芯片名（如 STM32F401RETx）。默认 Nucleo-F401RE 使用 STM32F401RETx
         #[arg(long, default_value = "STM32F401RETx")]
         chip: String,
     },
 }
 
-/// Peripheral (hardware) management subcommands
+/// 外设（硬件）管理子命令
 #[derive(Subcommand, Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum PeripheralCommands {
-    /// List configured peripherals
+    /// 列出已配置外设
     List,
-    /// Add a peripheral (board path, e.g. nucleo-f401re /dev/ttyACM0)
+    /// 添加外设（board + path，例如 nucleo-f401re /dev/ttyACM0）
     #[command(long_about = "\
-Add a peripheral by board type and transport path.
+按板卡类型与传输路径添加外设。
 
-Registers a hardware board so the agent can use its tools (GPIO, \
-sensors, actuators). Use 'native' as path for local GPIO on \
-single-board computers like Raspberry Pi.
+注册硬件板卡后，agent 可调用其工具能力（GPIO、传感器、执行器）。\
+单板机（如树莓派）本地 GPIO 可将路径设为 `native`。
 
-Supported boards: nucleo-f401re, rpi-gpio, esp32, arduino-uno.
+支持板卡：nucleo-f401re、rpi-gpio、esp32、arduino-uno。
 
-Examples:
+示例：
   zeroclaw peripheral add nucleo-f401re /dev/ttyACM0
   zeroclaw peripheral add rpi-gpio native
   zeroclaw peripheral add esp32 /dev/ttyUSB0")]
     Add {
-        /// Board type (nucleo-f401re, rpi-gpio, esp32)
+        /// 板卡类型（nucleo-f401re、rpi-gpio、esp32）
         board: String,
-        /// Path for serial transport (/dev/ttyACM0) or "native" for local GPIO
+        /// 串口路径（如 /dev/ttyACM0）或本地 GPIO 的 `native`
         path: String,
     },
-    /// Flash ZeroClaw firmware to Arduino (creates .ino, installs arduino-cli if needed, uploads)
+    /// 将 ZeroClaw 固件刷入 Arduino（生成 .ino、按需安装 arduino-cli、编译并上传）
     #[command(long_about = "\
-Flash ZeroClaw firmware to an Arduino board.
+将 ZeroClaw 固件刷入 Arduino 板卡。
 
-Generates the .ino sketch, installs arduino-cli if it is not \
-already available, compiles, and uploads the firmware.
+会生成 .ino、检测并安装 arduino-cli（若缺失）、编译并上传固件。
 
-Examples:
+示例：
   zeroclaw peripheral flash
   zeroclaw peripheral flash --port /dev/cu.usbmodem12345
   zeroclaw peripheral flash -p COM3")]
     Flash {
-        /// Serial port (e.g. /dev/cu.usbmodem12345). If omitted, uses first arduino-uno from config.
+        /// 串口（如 /dev/cu.usbmodem12345）；省略时使用配置中的首个 arduino-uno
         #[arg(short, long)]
         port: Option<String>,
     },
-    /// Setup Arduino Uno Q Bridge app (deploy GPIO bridge for agent control)
+    /// 配置 Arduino Uno Q Bridge 应用（部署 GPIO bridge 供 agent 控制）
     SetupUnoQ {
-        /// Uno Q IP (e.g. 192.168.0.48). If omitted, assumes running ON the Uno Q.
+        /// Uno Q IP（如 192.168.0.48）；省略时默认在 Uno Q 本机运行
         #[arg(long)]
         host: Option<String>,
     },
-    /// Flash ZeroClaw firmware to Nucleo-F401RE (builds + probe-rs run)
+    /// 刷写 ZeroClaw 固件到 Nucleo-F401RE（编译 + probe-rs）
     FlashNucleo,
 }

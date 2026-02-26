@@ -125,7 +125,7 @@ enum EstopLevelArg {
 #[command(name = "zeroclaw")]
 #[command(author = "theonlyhennygod")]
 #[command(version)]
-#[command(about = "The fastest, smallest AI assistant.", long_about = None)]
+#[command(about = "高性能、轻量化的 AI 助手运行时。", long_about = None)]
 struct Cli {
     #[arg(long, global = true)]
     config_dir: Option<String>,
@@ -136,147 +136,144 @@ struct Cli {
 
 #[derive(Subcommand, Debug)]
 enum Commands {
-    /// Initialize your workspace and configuration
+    /// 初始化工作区与配置
     Onboard {
-        /// Run the full interactive wizard (default is quick setup)
+        /// 运行完整交互向导（默认是快速配置）
         #[arg(long)]
         interactive: bool,
 
-        /// Overwrite existing config without confirmation
+        /// 无确认覆盖现有配置
         #[arg(long)]
         force: bool,
 
-        /// Reconfigure channels only (fast repair flow)
+        /// 仅重配 channels（快速修复流程）
         #[arg(long)]
         channels_only: bool,
 
-        /// API key (used in quick mode, ignored with --interactive)
+        /// API key（快速模式使用，--interactive 下忽略）
         #[arg(long)]
         api_key: Option<String>,
 
-        /// Provider name (used in quick mode, default: openrouter)
+        /// Provider 名称（快速模式使用，默认 openrouter）
         #[arg(long)]
         provider: Option<String>,
-        /// Model ID override (used in quick mode)
+        /// 指定 Model ID（快速模式）
         #[arg(long)]
         model: Option<String>,
-        /// Memory backend (sqlite, lucid, markdown, none) - used in quick mode, default: sqlite
+        /// Memory backend（sqlite, lucid, markdown, none），快速模式默认 sqlite
         #[arg(long)]
         memory: Option<String>,
     },
 
-    /// Start the AI agent loop
+    /// 启动 AI Agent 循环
     #[command(long_about = "\
-Start the AI agent loop.
+启动 AI Agent 循环。
 
-Launches an interactive chat session with the configured AI provider. \
-Use --message for single-shot queries without entering interactive mode.
+使用当前配置的 AI Provider 启动交互会话。\
+可通过 --message 执行单次请求而不进入交互模式。
 
-Examples:
-  zeroclaw agent                              # interactive session
-  zeroclaw agent -m \"Summarize today's logs\"  # single message
+示例：
+  zeroclaw agent                                 # 交互会话
+  zeroclaw agent -m \"总结今天的日志\"              # 单次消息
   zeroclaw agent -p anthropic --model claude-sonnet-4-20250514
   zeroclaw agent --peripheral nucleo-f401re:/dev/ttyACM0
   zeroclaw agent --autonomy-level full --max-actions-per-hour 100
   zeroclaw agent -m \"quick task\" --memory-backend none --compact-context")]
     Agent {
-        /// Single message mode (don't enter interactive mode)
+        /// 单次消息模式（不进入交互）
         #[arg(short, long)]
         message: Option<String>,
 
-        /// Provider to use (openrouter, anthropic, openai, openai-codex)
+        /// 使用的 Provider（openrouter, anthropic, openai, openai-codex）
         #[arg(short, long)]
         provider: Option<String>,
 
-        /// Model to use
+        /// 使用的模型
         #[arg(long)]
         model: Option<String>,
 
-        /// Temperature (0.0 - 2.0)
+        /// Temperature（0.0 - 2.0）
         #[arg(short, long, default_value = "0.7", value_parser = parse_temperature)]
         temperature: f64,
 
-        /// Attach a peripheral (board:path, e.g. nucleo-f401re:/dev/ttyACM0)
+        /// 挂载外设（board:path，例如 nucleo-f401re:/dev/ttyACM0）
         #[arg(long)]
         peripheral: Vec<String>,
 
-        /// Autonomy level (read_only, supervised, full)
+        /// Autonomy level（read_only, supervised, full）
         #[arg(long, value_parser = clap::value_parser!(security::AutonomyLevel))]
         autonomy_level: Option<security::AutonomyLevel>,
 
-        /// Maximum shell/tool actions per hour
+        /// 每小时最大 shell/tool 执行动作数
         #[arg(long)]
         max_actions_per_hour: Option<u32>,
 
-        /// Maximum tool-call iterations per message
+        /// 每条消息最大 tool-call 迭代次数
         #[arg(long)]
         max_tool_iterations: Option<usize>,
 
-        /// Maximum conversation history messages
+        /// 会话历史最大消息条数
         #[arg(long)]
         max_history_messages: Option<usize>,
 
-        /// Enable compact context mode (smaller prompts for limited models)
+        /// 启用 compact context（适合上下文较小的模型）
         #[arg(long)]
         compact_context: bool,
 
-        /// Memory backend (sqlite, markdown, none)
+        /// Memory backend（sqlite, markdown, none）
         #[arg(long)]
         memory_backend: Option<String>,
     },
 
-    /// Start the gateway server (webhooks, websockets)
+    /// 启动网关服务（webhook / websocket）
     #[command(long_about = "\
-Start the gateway server (webhooks, websockets).
+启动网关服务（webhook / websocket）。
 
-Runs the HTTP/WebSocket gateway that accepts incoming webhook events \
-and WebSocket connections. Bind address defaults to the values in \
-your config file (gateway.host / gateway.port).
+运行 HTTP/WebSocket 网关，用于接收 webhook 事件和 WebSocket 连接。\
+默认绑定地址来自配置文件（gateway.host / gateway.port）。
 
-Examples:
-  zeroclaw gateway                  # use config defaults
-  zeroclaw gateway -p 8080          # listen on port 8080
-  zeroclaw gateway --host 0.0.0.0   # bind to all interfaces
-  zeroclaw gateway -p 0             # random available port")]
+示例：
+  zeroclaw gateway                  # 使用配置默认值
+  zeroclaw gateway -p 8080          # 监听 8080 端口
+  zeroclaw gateway --host 0.0.0.0   # 绑定到所有网卡
+  zeroclaw gateway -p 0             # 使用随机可用端口")]
     Gateway {
-        /// Port to listen on (use 0 for random available port); defaults to config gateway.port
+        /// 监听端口（0 表示随机可用端口）；默认取 gateway.port
         #[arg(short, long)]
         port: Option<u16>,
 
-        /// Host to bind to; defaults to config gateway.host
+        /// 绑定地址；默认取 gateway.host
         #[arg(long)]
         host: Option<String>,
     },
 
-    /// Start long-running autonomous runtime (gateway + channels + heartbeat + scheduler)
+    /// 启动常驻运行时（gateway + channels + heartbeat + scheduler）
     #[command(long_about = "\
-Start the long-running autonomous daemon.
+启动长期运行 daemon。
 
-Launches the full ZeroClaw runtime: gateway server, all configured \
-channels (Telegram, Discord, Slack, etc.), heartbeat monitor, and \
-the cron scheduler. This is the recommended way to run ZeroClaw in \
-production or as an always-on assistant.
+会启动完整 ZeroClaw 运行时：gateway、所有已配置 channels \
+（Telegram、Discord、Slack 等）、heartbeat 监控与 cron 调度。\
+这是生产环境或常驻助手场景的推荐运行方式。
 
-Use 'zeroclaw service install' to register the daemon as an OS \
-service (systemd/launchd) for auto-start on boot.
+可用 `zeroclaw service install` 注册为系统服务（systemd/launchd），实现开机自启。
 
-Examples:
-  zeroclaw daemon                   # use config defaults
-  zeroclaw daemon -p 9090           # gateway on port 9090
-  zeroclaw daemon --host 127.0.0.1  # localhost only")]
+示例：
+  zeroclaw daemon                   # 使用配置默认值
+  zeroclaw daemon -p 9090           # gateway 使用 9090 端口
+  zeroclaw daemon --host 127.0.0.1  # 仅本机监听")]
     Daemon {
-        /// Port to listen on (use 0 for random available port); defaults to config gateway.port
+        /// 监听端口（0 表示随机可用端口）；默认取 gateway.port
         #[arg(short, long)]
         port: Option<u16>,
 
-        /// Host to bind to; defaults to config gateway.host
+        /// 绑定地址；默认取 gateway.host
         #[arg(long)]
         host: Option<String>,
     },
 
-    /// Manage OS service lifecycle (launchd/systemd user service)
+    /// 管理系统服务生命周期（launchd/systemd user service）
     Service {
-        /// Init system to use: auto (detect), systemd, or openrc
+        /// 指定 init system：auto（自动）、systemd、openrc
         #[arg(long, default_value = "auto", value_parser = ["auto", "systemd", "openrc"])]
         service_init: String,
 
@@ -284,18 +281,18 @@ Examples:
         service_command: ServiceCommands,
     },
 
-    /// Run diagnostics for daemon/scheduler/channel freshness
+    /// 运行 daemon/scheduler/channel 诊断
     Doctor {
         #[command(subcommand)]
         doctor_command: Option<DoctorCommands>,
     },
 
-    /// Show system status (full details)
+    /// 输出系统状态（完整信息）
     Status,
 
-    /// Engage, inspect, and resume emergency-stop states.
+    /// 启用、查看和恢复紧急停止（estop）状态。
     ///
-    /// Examples:
+    /// 示例：
     /// - `zeroclaw estop`
     /// - `zeroclaw estop --level network-kill`
     /// - `zeroclaw estop --level domain-block --domain "*.chase.com"`
@@ -308,31 +305,31 @@ Examples:
         #[command(subcommand)]
         estop_command: Option<EstopSubcommands>,
 
-        /// Level used when engaging estop from `zeroclaw estop`.
+        /// 使用 `zeroclaw estop` 时指定触发级别。
         #[arg(long, value_enum)]
         level: Option<EstopLevelArg>,
 
-        /// Domain pattern(s) for `domain-block` (repeatable).
+        /// `domain-block` 使用的域名模式（可重复传入）。
         #[arg(long = "domain")]
         domains: Vec<String>,
 
-        /// Tool name(s) for `tool-freeze` (repeatable).
+        /// `tool-freeze` 使用的工具名（可重复传入）。
         #[arg(long = "tool")]
         tools: Vec<String>,
     },
 
-    /// Configure and manage scheduled tasks
+    /// 配置与管理计划任务
     #[command(long_about = "\
-Configure and manage scheduled tasks.
+配置与管理计划任务。
 
-Schedule recurring, one-shot, or interval-based tasks using cron \
-expressions, RFC 3339 timestamps, durations, or fixed intervals.
+可使用 cron 表达式、RFC 3339 时间戳、时长或固定间隔，\
+创建周期任务、一次性任务或间隔任务。
 
-Cron expressions use the standard 5-field format: \
-'min hour day month weekday'. Timezones default to UTC; \
-override with --tz and an IANA timezone name.
+Cron 表达式使用标准 5 字段格式：\
+`min hour day month weekday`。默认时区为 UTC；\
+可通过 `--tz` 指定 IANA 时区覆盖。
 
-Examples:
+示例：
   zeroclaw cron list
   zeroclaw cron add '0 9 * * 1-5' 'Good morning' --tz America/New_York
   zeroclaw cron add '*/30 * * * *' 'Check system health'
@@ -346,24 +343,23 @@ Examples:
         cron_command: CronCommands,
     },
 
-    /// Manage provider model catalogs
+    /// 管理 Provider 模型目录
     Models {
         #[command(subcommand)]
         model_command: ModelCommands,
     },
 
-    /// List supported AI providers
+    /// 列出支持的 AI Provider
     Providers,
 
-    /// Manage channels (telegram, discord, slack)
+    /// 管理 channels（telegram、discord、slack 等）
     #[command(long_about = "\
-Manage communication channels.
+管理通信通道。
 
-Add, remove, list, and health-check channels that connect ZeroClaw \
-to messaging platforms. Supported channel types: telegram, discord, \
-slack, whatsapp, matrix, imessage, email.
+可对接消息平台的 channel 进行添加、删除、查看与健康检查。\
+支持类型包括：telegram、discord、slack、whatsapp、matrix、imessage、email。
 
-Examples:
+示例：
   zeroclaw channel list
   zeroclaw channel doctor
   zeroclaw channel add telegram '{\"bot_token\":\"...\",\"name\":\"my-bot\"}'
@@ -374,39 +370,38 @@ Examples:
         channel_command: ChannelCommands,
     },
 
-    /// Browse 50+ integrations
+    /// 浏览 50+ integrations
     Integrations {
         #[command(subcommand)]
         integration_command: IntegrationCommands,
     },
 
-    /// Manage skills (user-defined capabilities)
+    /// 管理 skills（用户自定义能力）
     Skills {
         #[command(subcommand)]
         skill_command: SkillCommands,
     },
 
-    /// Migrate data from other agent runtimes
+    /// 从其他 agent 运行时迁移数据
     Migrate {
         #[command(subcommand)]
         migrate_command: MigrateCommands,
     },
 
-    /// Manage provider subscription authentication profiles
+    /// 管理 Provider 订阅认证配置
     Auth {
         #[command(subcommand)]
         auth_command: AuthCommands,
     },
 
-    /// Discover and introspect USB hardware
+    /// 发现并探测 USB 硬件
     #[command(long_about = "\
-Discover and introspect USB hardware.
+发现并探测 USB 硬件。
 
-Enumerate connected USB devices, identify known development boards \
-(STM32 Nucleo, Arduino, ESP32), and retrieve chip information via \
-probe-rs / ST-Link.
+枚举已连接的 USB 设备，识别常见开发板 \
+（STM32 Nucleo、Arduino、ESP32），并通过 probe-rs / ST-Link 获取芯片信息。
 
-Examples:
+示例：
   zeroclaw hardware discover
   zeroclaw hardware introspect /dev/ttyACM0
   zeroclaw hardware info --chip STM32F401RETx")]
@@ -415,15 +410,15 @@ Examples:
         hardware_command: zeroclaw::HardwareCommands,
     },
 
-    /// Manage hardware peripherals (STM32, RPi GPIO, etc.)
+    /// 管理硬件外设（STM32、RPi GPIO 等）
     #[command(long_about = "\
-Manage hardware peripherals.
+管理硬件外设。
 
-Add, list, flash, and configure hardware boards that expose tools \
-to the agent (GPIO, sensors, actuators). Supported boards: \
-nucleo-f401re, rpi-gpio, esp32, arduino-uno.
+可对硬件板卡进行添加、列出、刷写与配置，供 agent 调用硬件能力 \
+（GPIO、传感器、执行器）。支持板卡包括：\
+nucleo-f401re、rpi-gpio、esp32、arduino-uno。
 
-Examples:
+示例：
   zeroclaw peripheral list
   zeroclaw peripheral add nucleo-f401re /dev/ttyACM0
   zeroclaw peripheral add rpi-gpio native
@@ -434,15 +429,14 @@ Examples:
         peripheral_command: zeroclaw::PeripheralCommands,
     },
 
-    /// Manage agent memory (list, get, stats, clear)
+    /// 管理 agent memory（list/get/stats/clear）
     #[command(long_about = "\
-Manage agent memory entries.
+管理 agent memory 条目。
 
-List, inspect, and clear memory entries stored by the agent. \
-Supports filtering by category and session, pagination, and \
-batch clearing with confirmation.
+可列出、查看、清理 agent 存储的 memory。\
+支持按 category/session 过滤、分页，以及批量清理前确认。
 
-Examples:
+示例：
   zeroclaw memory stats
   zeroclaw memory list
   zeroclaw memory list --category core --limit 10
@@ -453,34 +447,33 @@ Examples:
         memory_command: MemoryCommands,
     },
 
-    /// Manage configuration
+    /// 管理配置
     #[command(long_about = "\
-Manage ZeroClaw configuration.
+管理 ZeroClaw 配置。
 
-Inspect and export configuration settings. Use 'schema' to dump \
-the full JSON Schema for the config file, which documents every \
-available key, type, and default value.
+可查看并导出配置设置。使用 `schema` 可输出配置文件的完整 JSON Schema，\
+其中包含全部可用键、类型与默认值。
 
-Examples:
-  zeroclaw config schema              # print JSON Schema to stdout
+示例：
+  zeroclaw config schema              # 输出 JSON Schema 到 stdout
   zeroclaw config schema > schema.json")]
     Config {
         #[command(subcommand)]
         config_command: ConfigCommands,
     },
 
-    /// Generate shell completion script to stdout
+    /// 生成 shell 补全脚本（输出到 stdout）
     #[command(long_about = "\
-Generate shell completion scripts for `zeroclaw`.
+为 `zeroclaw` 生成 shell 补全脚本。
 
-The script is printed to stdout so it can be sourced directly:
+脚本会输出到 stdout，可直接 source：
 
-Examples:
+示例：
   source <(zeroclaw completions bash)
   zeroclaw completions zsh > ~/.zfunc/_zeroclaw
   zeroclaw completions fish > ~/.config/fish/completions/zeroclaw.fish")]
     Completions {
-        /// Target shell
+        /// 目标 shell
         #[arg(value_enum)]
         shell: CompletionShell,
     },
@@ -488,26 +481,26 @@ Examples:
 
 #[derive(Subcommand, Debug)]
 enum ConfigCommands {
-    /// Dump the full configuration JSON Schema to stdout
+    /// 输出完整配置 JSON Schema 到 stdout
     Schema,
 }
 
 #[derive(Subcommand, Debug)]
 enum EstopSubcommands {
-    /// Print current estop status.
+    /// 输出当前 estop 状态。
     Status,
-    /// Resume from an engaged estop level.
+    /// 从已触发的 estop 状态恢复。
     Resume {
-        /// Resume only network kill.
+        /// 仅恢复 network kill。
         #[arg(long)]
         network: bool,
-        /// Resume one or more blocked domain patterns.
+        /// 恢复一个或多个被封锁的域名模式。
         #[arg(long = "domain")]
         domains: Vec<String>,
-        /// Resume one or more frozen tools.
+        /// 恢复一个或多个被冻结的工具。
         #[arg(long = "tool")]
         tools: Vec<String>,
-        /// OTP code. If omitted and OTP is required, a prompt is shown.
+        /// OTP 码；若策略要求 OTP 且未提供，将进入交互输入。
         #[arg(long)]
         otp: Option<String>,
     },
@@ -515,142 +508,142 @@ enum EstopSubcommands {
 
 #[derive(Subcommand, Debug)]
 enum AuthCommands {
-    /// Login with OAuth (OpenAI Codex or Gemini)
+    /// 通过 OAuth 登录（OpenAI Codex 或 Gemini）
     Login {
-        /// Provider (`openai-codex` or `gemini`)
+        /// Provider（`openai-codex` 或 `gemini`）
         #[arg(long)]
         provider: String,
-        /// Profile name (default: default)
+        /// Profile 名称（默认：default）
         #[arg(long, default_value = "default")]
         profile: String,
-        /// Use OAuth device-code flow
+        /// 使用 OAuth device-code 流程
         #[arg(long)]
         device_code: bool,
     },
-    /// Complete OAuth by pasting redirect URL or auth code
+    /// 粘贴重定向 URL 或授权码以完成 OAuth
     PasteRedirect {
-        /// Provider (`openai-codex`)
+        /// Provider（`openai-codex`）
         #[arg(long)]
         provider: String,
-        /// Profile name (default: default)
+        /// Profile 名称（默认：default）
         #[arg(long, default_value = "default")]
         profile: String,
-        /// Full redirect URL or raw OAuth code
+        /// 完整重定向 URL 或原始 OAuth code
         #[arg(long)]
         input: Option<String>,
     },
-    /// Paste setup token / auth token (for Anthropic subscription auth)
+    /// 粘贴 setup token / auth token（用于 Anthropic 订阅认证）
     PasteToken {
-        /// Provider (`anthropic`)
+        /// Provider（`anthropic`）
         #[arg(long)]
         provider: String,
-        /// Profile name (default: default)
+        /// Profile 名称（默认：default）
         #[arg(long, default_value = "default")]
         profile: String,
-        /// Token value (if omitted, read interactively)
+        /// Token 值（省略时进入交互输入）
         #[arg(long)]
         token: Option<String>,
-        /// Auth kind override (`authorization` or `api-key`)
+        /// 认证类型覆盖（`authorization` 或 `api-key`）
         #[arg(long)]
         auth_kind: Option<String>,
     },
-    /// Alias for `paste-token` (interactive by default)
+    /// `paste-token` 的别名（默认交互）
     SetupToken {
-        /// Provider (`anthropic`)
+        /// Provider（`anthropic`）
         #[arg(long)]
         provider: String,
-        /// Profile name (default: default)
+        /// Profile 名称（默认：default）
         #[arg(long, default_value = "default")]
         profile: String,
     },
-    /// Refresh OpenAI Codex access token using refresh token
+    /// 使用 refresh token 刷新 OpenAI Codex access token
     Refresh {
-        /// Provider (`openai-codex`)
+        /// Provider（`openai-codex`）
         #[arg(long)]
         provider: String,
-        /// Profile name or profile id
+        /// Profile 名称或 profile id
         #[arg(long)]
         profile: Option<String>,
     },
-    /// Remove auth profile
+    /// 删除认证 profile
     Logout {
         /// Provider
         #[arg(long)]
         provider: String,
-        /// Profile name (default: default)
+        /// Profile 名称（默认：default）
         #[arg(long, default_value = "default")]
         profile: String,
     },
-    /// Set active profile for a provider
+    /// 为 Provider 设置当前激活 profile
     Use {
         /// Provider
         #[arg(long)]
         provider: String,
-        /// Profile name or full profile id
+        /// Profile 名称或完整 profile id
         #[arg(long)]
         profile: String,
     },
-    /// List auth profiles
+    /// 列出认证 profiles
     List,
-    /// Show auth status with active profile and token expiry info
+    /// 查看认证状态（含当前 profile 与 token 到期信息）
     Status,
 }
 
 #[derive(Subcommand, Debug)]
 enum ModelCommands {
-    /// Refresh and cache provider models
+    /// 刷新并缓存 Provider 模型列表
     Refresh {
-        /// Provider name (defaults to configured default provider)
+        /// Provider 名称（默认使用配置中的默认 Provider）
         #[arg(long)]
         provider: Option<String>,
 
-        /// Refresh all providers that support live model discovery
+        /// 刷新所有支持在线模型发现的 Provider
         #[arg(long)]
         all: bool,
 
-        /// Force live refresh and ignore fresh cache
+        /// 强制在线刷新并忽略有效缓存
         #[arg(long)]
         force: bool,
     },
-    /// List cached models for a provider
+    /// 查看某个 Provider 的缓存模型
     List {
-        /// Provider name (defaults to configured default provider)
+        /// Provider 名称（默认使用配置中的默认 Provider）
         #[arg(long)]
         provider: Option<String>,
     },
-    /// Set the default model in config
+    /// 设置配置中的默认模型
     Set {
-        /// Model name to set as default
+        /// 要设为默认的模型名
         model: String,
     },
-    /// Show current model configuration and cache status
+    /// 查看当前模型配置与缓存状态
     Status,
 }
 
 #[derive(Subcommand, Debug)]
 enum DoctorCommands {
-    /// Probe model catalogs across providers and report availability
+    /// 探测各 Provider 模型目录并输出可用性
     Models {
-        /// Probe a specific provider only (default: all known providers)
+        /// 仅探测指定 Provider（默认：所有已知 Provider）
         #[arg(long)]
         provider: Option<String>,
 
-        /// Prefer cached catalogs when available (skip forced live refresh)
+        /// 优先使用缓存（不强制在线刷新）
         #[arg(long)]
         use_cache: bool,
     },
-    /// Query runtime trace events (tool diagnostics and model replies)
+    /// 查询运行时 trace 事件（工具诊断与模型回复）
     Traces {
-        /// Show a specific trace event by id
+        /// 按 id 查看单条 trace 事件
         #[arg(long)]
         id: Option<String>,
-        /// Filter list output by event type
+        /// 按事件类型过滤
         #[arg(long)]
         event: Option<String>,
-        /// Case-insensitive text match across message/payload
+        /// 在 message/payload 上做不区分大小写文本匹配
         #[arg(long)]
         contains: Option<String>,
-        /// Maximum number of events to display
+        /// 最多显示事件数
         #[arg(long, default_value = "20")]
         limit: usize,
     },
@@ -658,7 +651,7 @@ enum DoctorCommands {
 
 #[derive(Subcommand, Debug)]
 enum MemoryCommands {
-    /// List memory entries with optional filters
+    /// 列出 memory 条目（支持过滤）
     List {
         #[arg(long)]
         category: Option<String>,
@@ -669,18 +662,18 @@ enum MemoryCommands {
         #[arg(long, default_value = "0")]
         offset: usize,
     },
-    /// Get a specific memory entry by key
+    /// 按 key 获取单条 memory
     Get { key: String },
-    /// Show memory backend statistics and health
+    /// 查看 memory backend 统计与健康状态
     Stats,
-    /// Clear memories by category, by key, or clear all
+    /// 按 category/key 清理 memory，或全部清理
     Clear {
-        /// Delete a single entry by key (supports prefix match)
+        /// 按 key 删除单条（支持前缀匹配）
         #[arg(long)]
         key: Option<String>,
         #[arg(long)]
         category: Option<String>,
-        /// Skip confirmation prompt
+        /// 跳过确认提示
         #[arg(long)]
         yes: bool,
     },
