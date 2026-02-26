@@ -75,7 +75,9 @@ jobs:
           fi
           target="${{ github.event.inputs.target || 'x86_64-unknown-linux-gnu' }}"
           archive="zeroclaw-${target}.tar.gz"
-          checksum="${archive}.sha256"
+          archive_checksum="${archive}.sha256"
+          binary="zeroclaw-${target}"
+          binary_checksum="${binary}.sha256"
           {
             echo "release_ref=${release_ref}"
             echo "release_tag=${release_tag}"
@@ -83,7 +85,9 @@ jobs:
             echo "prerelease=${prerelease}"
             echo "target=${target}"
             echo "archive=${archive}"
-            echo "checksum=${checksum}"
+            echo "archive_checksum=${archive_checksum}"
+            echo "binary=${binary}"
+            echo "binary_checksum=${binary_checksum}"
           } >> "$GITHUB_OUTPUT"
 
       - name: Checkout
@@ -131,9 +135,13 @@ jobs:
           set -euo pipefail
           target="${{ steps.vars.outputs.target }}"
           archive="${{ steps.vars.outputs.archive }}"
+          binary="${{ steps.vars.outputs.binary }}"
+          cp "target/${target}/release-fast/zeroclaw" "${binary}"
+          chmod +x "${binary}"
           cd "target/${target}/release-fast"
           tar czf "../../../${archive}" zeroclaw
           cd -
+          sha256sum "${binary}" > "${binary}.sha256"
           sha256sum "${archive}" > "${archive}.sha256"
 
       - name: Publish GitHub Release
@@ -146,16 +154,20 @@ jobs:
           target_commitish: ${{ steps.vars.outputs.release_ref }}
           prerelease: ${{ steps.vars.outputs.prerelease == 'true' }}
           files: |
+            ${{ steps.vars.outputs.binary }}
+            ${{ steps.vars.outputs.binary_checksum }}
             ${{ steps.vars.outputs.archive }}
-            ${{ steps.vars.outputs.checksum }}
+            ${{ steps.vars.outputs.archive_checksum }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: zeroclaw-${{ steps.vars.outputs.target }}
           path: |
+            ${{ steps.vars.outputs.binary }}
+            ${{ steps.vars.outputs.binary_checksum }}
             ${{ steps.vars.outputs.archive }}
-            ${{ steps.vars.outputs.checksum }}
+            ${{ steps.vars.outputs.archive_checksum }}
           if-no-files-found: error
           retention-days: 14
 
@@ -166,6 +178,7 @@ jobs:
           {
             echo "### Ubuntu Build Output"
             echo "- target: \`${{ steps.vars.outputs.target }}\`"
+            echo "- binary: \`${{ steps.vars.outputs.binary }}\`"
             echo "- archive: \`${{ steps.vars.outputs.archive }}\`"
             if [[ "${{ steps.vars.outputs.publish_release }}" == "true" ]]; then
               echo "- release: ${{ steps.gh_release.outputs.url }}"

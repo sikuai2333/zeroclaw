@@ -2,18 +2,16 @@ use crate::config::Config;
 use crate::service::{self, InitSystem};
 use crate::ServiceCommands;
 use anyhow::{bail, Context, Result};
-use flate2::read::GzDecoder;
 use reqwest::blocking::Client;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use std::fs;
-use std::io::{Cursor, Read};
+use std::io::Read;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use tar::Archive;
 
 const DEFAULT_UPDATE_REPO: &str = "sikuai2333/zeroclaw";
 
@@ -57,8 +55,8 @@ pub fn run(options: UpdateOptions, config: &Config) -> Result<()> {
 fn run_linux_update(options: UpdateOptions, config: &Config) -> Result<()> {
     let repo = resolve_repo(options.repo);
     let triple = linux_target_triple()?;
-    let archive_name = format!("zeroclaw-{triple}.tar.gz");
-    let checksum_name = format!("{archive_name}.sha256");
+    let binary_name = format!("zeroclaw-{triple}");
+    let checksum_name = format!("{binary_name}.sha256");
 
     let release_url = if let Some(tag) = options.tag.as_deref() {
         format!("https://api.github.com/repos/{repo}/releases/tags/{tag}")
@@ -82,11 +80,11 @@ fn run_linux_update(options: UpdateOptions, config: &Config) -> Result<()> {
         .json()
         .context("Failed to parse release metadata")?;
 
-    let archive_asset = release
+    let binary_asset = release
         .assets
         .iter()
-        .find(|a| a.name == archive_name)
-        .with_context(|| format!("Release '{}' missing asset '{}'", release.tag_name, archive_name))?;
+        .find(|a| a.name == binary_name)
+        .with_context(|| format!("Release '{}' missing asset '{}'", release.tag_name, binary_name))?;
     let checksum_asset = release
         .assets
         .iter()
@@ -98,20 +96,20 @@ fn run_linux_update(options: UpdateOptions, config: &Config) -> Result<()> {
             )
         })?;
 
-    println!("⬇️  Downloading {}", archive_asset.name);
-    let archive_bytes = download_bytes(&client, &archive_asset.browser_download_url)?;
+    println!("⬇️  Downloading {}", binary_asset.name);
+    let binary_bytes = download_bytes(&client, &binary_asset.browser_download_url)?;
     let checksum_text = download_text(&client, &checksum_asset.browser_download_url)?;
 
-    let expected_hash = parse_checksum(&checksum_text, &archive_name)?;
-    let downloaded_hash = sha256_hex(&archive_bytes);
+    let expected_hash = parse_checksum(&checksum_text, &binary_name)?;
+    let downloaded_hash = sha256_hex(&binary_bytes);
     if !downloaded_hash.eq_ignore_ascii_case(&expected_hash) {
         bail!(
-            "Checksum mismatch for downloaded archive: expected {}, got {}",
+            "Checksum mismatch for downloaded binary: expected {}, got {}",
             expected_hash,
             downloaded_hash
         );
     }
-    println!("✅ Archive checksum verified");
+    println!("✅ Binary checksum verified");
 
     let exe_path = std::env::current_exe().context("Failed to resolve current executable path")?;
     let current_hash = sha256_file(&exe_path)?;
@@ -131,12 +129,11 @@ fn run_linux_update(options: UpdateOptions, config: &Config) -> Result<()> {
         return Ok(());
     }
 
-    let new_binary = extract_binary_from_archive(&archive_bytes)?;
-    if new_binary.is_empty() {
-        bail!("Extracted binary is empty");
+    if binary_bytes.is_empty() {
+        bail!("Downloaded binary is empty");
     }
 
-    let candidate_path = write_candidate_binary(&exe_path, &new_binary)?;
+    let candidate_path = write_candidate_binary(&exe_path, &binary_bytes)?;
     verify_candidate_binary(&candidate_path)?;
     let backup_path = backup_path_for(&exe_path)?;
 
@@ -276,25 +273,6 @@ fn sha256_file(path: &Path) -> Result<String> {
         hasher.update(&buf[..n]);
     }
     Ok(format!("{:x}", hasher.finalize()))
-}
-
-#[cfg(target_os = "linux")]
-fn extract_binary_from_archive(archive_bytes: &[u8]) -> Result<Vec<u8>> {
-    let cursor = Cursor::new(archive_bytes);
-    let decoder = GzDecoder::new(cursor);
-    let mut archive = Archive::new(decoder);
-    for entry in archive.entries().context("Failed to read archive entries")? {
-        let mut entry = entry.context("Failed to read archive entry")?;
-        let path = entry.path().context("Failed to read archive entry path")?;
-        if path.file_name().and_then(|n| n.to_str()) == Some("zeroclaw") {
-            let mut data = Vec::new();
-            entry
-                .read_to_end(&mut data)
-                .context("Failed to read extracted binary")?;
-            return Ok(data);
-        }
-    }
-    bail!("Archive does not contain expected 'zeroclaw' binary")
 }
 
 #[cfg(target_os = "linux")]
