@@ -2689,6 +2689,76 @@ mod app_channel_tests {
         assert!(err.contains("Invalid window"));
     }
 
+    #[test]
+    fn app_channel_stream_progress_interval_clamps_to_min_and_max() {
+        let mut query = std::collections::BTreeMap::new();
+
+        query.insert("progress_interval_sec".to_string(), "1".to_string());
+        let low = parse_query_interval(
+            &query,
+            "progress_interval_sec",
+            APP_STREAM_PUSH_INTERVAL_SECS,
+            APP_STREAM_MIN_INTERVAL_SECS,
+            APP_STREAM_MAX_INTERVAL_SECS,
+        );
+        assert_eq!(low, APP_STREAM_MIN_INTERVAL_SECS);
+
+        query.insert("progress_interval_sec".to_string(), "999".to_string());
+        let high = parse_query_interval(
+            &query,
+            "progress_interval_sec",
+            APP_STREAM_PUSH_INTERVAL_SECS,
+            APP_STREAM_MIN_INTERVAL_SECS,
+            APP_STREAM_MAX_INTERVAL_SECS,
+        );
+        assert_eq!(high, APP_STREAM_MAX_INTERVAL_SECS);
+    }
+
+    #[test]
+    fn app_channel_stream_summary_interval_clamps_and_defaults_on_invalid() {
+        let mut query = std::collections::BTreeMap::new();
+
+        query.insert("summary_interval_sec".to_string(), "5".to_string());
+        let low = parse_query_interval(
+            &query,
+            "summary_interval_sec",
+            APP_STREAM_DEFAULT_SUMMARY_INTERVAL_SECS,
+            APP_STREAM_MIN_SUMMARY_INTERVAL_SECS,
+            APP_STREAM_MAX_SUMMARY_INTERVAL_SECS,
+        );
+        assert_eq!(low, APP_STREAM_MIN_SUMMARY_INTERVAL_SECS);
+
+        query.insert("summary_interval_sec".to_string(), "9999".to_string());
+        let high = parse_query_interval(
+            &query,
+            "summary_interval_sec",
+            APP_STREAM_DEFAULT_SUMMARY_INTERVAL_SECS,
+            APP_STREAM_MIN_SUMMARY_INTERVAL_SECS,
+            APP_STREAM_MAX_SUMMARY_INTERVAL_SECS,
+        );
+        assert_eq!(high, APP_STREAM_MAX_SUMMARY_INTERVAL_SECS);
+
+        query.insert("summary_interval_sec".to_string(), "nan".to_string());
+        let invalid = parse_query_interval(
+            &query,
+            "summary_interval_sec",
+            APP_STREAM_DEFAULT_SUMMARY_INTERVAL_SECS,
+            APP_STREAM_MIN_SUMMARY_INTERVAL_SECS,
+            APP_STREAM_MAX_SUMMARY_INTERVAL_SECS,
+        );
+        assert_eq!(invalid, APP_STREAM_DEFAULT_SUMMARY_INTERVAL_SECS);
+
+        query.remove("summary_interval_sec");
+        let missing = parse_query_interval(
+            &query,
+            "summary_interval_sec",
+            APP_STREAM_DEFAULT_SUMMARY_INTERVAL_SECS,
+            APP_STREAM_MIN_SUMMARY_INTERVAL_SECS,
+            APP_STREAM_MAX_SUMMARY_INTERVAL_SECS,
+        );
+        assert_eq!(missing, APP_STREAM_DEFAULT_SUMMARY_INTERVAL_SECS);
+    }
+
     #[tokio::test]
     async fn app_channel_error_responses_keep_error_field_shape_consistent() {
         let _guard = env_lock();
