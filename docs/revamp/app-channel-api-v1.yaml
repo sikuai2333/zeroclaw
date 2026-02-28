@@ -104,6 +104,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SystemMetricsResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '500':
@@ -469,7 +471,7 @@ components:
 
     ErrorResponse:
       type: object
-      required: [error, code]
+      required: [error]
       properties:
         error:
           type: string
