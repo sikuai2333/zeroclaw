@@ -1,0 +1,60 @@
+name: CI Feedback Loop
+
+on:
+  workflow_run:
+    workflows:
+      - CI Build (Fast)
+      - Flutter Build (Gated)
+    types:
+      - completed
+
+permissions:
+  actions: read
+  contents: write
+
+concurrency:
+  group: ci-feedback-${{ github.event.workflow_run.id }}
+  cancel-in-progress: false
+
+jobs:
+  writeback-on-failure:
+    name: Write back CI failure feedback
+    if: ${{ github.event.workflow_run.conclusion == 'failure' && github.event.workflow_run.head_repository.full_name == github.repository && github.event.workflow_run.head_branch != '' }}
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout target branch
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ github.event.workflow_run.head_branch }}
+          fetch-depth: 0
+
+      - name: Refresh CI failure feedback files
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          bash scripts/ci/refresh_ci_feedback.sh \
+            --repo "${{ github.repository }}" \
+            --run-id "${{ github.event.workflow_run.id }}" \
+            --workflow "${{ github.event.workflow_run.name }}" \
+            --ci-failures CI_FAILURES.md \
+            --next-action NEXT_ACTION.md \
+            --task-board TASK_BOARD.md
+
+      - name: Commit writeback if changed
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- CI_FAILURES.md NEXT_ACTION.md TASK_BOARD.md; then
+            echo "No writeback changes detected."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add CI_FAILURES.md NEXT_ACTION.md TASK_BOARD.md
+          git commit -m "ci(m4): write back failure feedback for run ${{ github.event.workflow_run.id }}"
+          git push origin "HEAD:${{ github.event.workflow_run.head_branch }}"
