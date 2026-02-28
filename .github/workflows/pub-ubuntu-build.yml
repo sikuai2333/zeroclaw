@@ -102,7 +102,7 @@ jobs:
           targets: ${{ steps.vars.outputs.target }}
 
       - name: Restore Rust cache
-        uses: useblacksmith/rust-cache@f53e7f127245d2a269b3d90879ccf259876842d5 # v3
+        uses: Swatinem/rust-cache@v2
         with:
           prefix-key: pub-ubuntu-build
           cache-targets: true
