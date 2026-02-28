@@ -156,6 +156,7 @@ enum ChannelRuntimeCommand {
     ShowModel,
     SetModel(String),
     NewSession,
+    TriggerReport,
     RequestAllToolsOnce,
     RequestToolApproval(String),
     ConfirmToolApproval(String),
@@ -700,6 +701,7 @@ fn parse_runtime_command(channel_name: &str, content: &str) -> Option<ChannelRun
     match base_command.as_str() {
         // History reset commands are safe for all channels.
         "/new" | "/clear" => Some(ChannelRuntimeCommand::NewSession),
+        "/trigger" | "/触发" => Some(ChannelRuntimeCommand::TriggerReport),
         "/approve-all-once" => Some(ChannelRuntimeCommand::RequestAllToolsOnce),
         "/approve-request" => Some(ChannelRuntimeCommand::RequestToolApproval(tail)),
         "/approve-confirm" => Some(ChannelRuntimeCommand::ConfirmToolApproval(tail)),
@@ -1702,6 +1704,7 @@ fn build_models_help_response(current: &ChannelRouteSelection, workspace_dir: &P
     response.push_str("使用 `/approve <tool-name>` 直接授权受监管工具。\n");
     response.push_str("使用 `/unapprove <tool-name>` 撤销授权。\n");
     response.push_str("使用 `/approvals` 查看授权状态。\n");
+    response.push_str("使用 `/触发`（或 `/trigger`）获取当前任务进度播报。\n");
     response.push_str(
         "也支持自然语言授权（受策略控制）。\n\
          - `direct` 模式（默认）：`授权工具 shell` 会立即生效。\n\
@@ -1745,6 +1748,7 @@ fn build_providers_help_response(current: &ChannelRouteSelection) -> String {
     response.push_str("使用 `/approve <tool-name>` 直接授权受监管工具。\n");
     response.push_str("使用 `/unapprove <tool-name>` 撤销授权。\n");
     response.push_str("使用 `/approvals` 查看授权状态。\n");
+    response.push_str("使用 `/触发`（或 `/trigger`）获取当前任务进度播报。\n");
     response.push_str(
         "也支持自然语言授权（受策略控制）。\n\
          - `direct` 模式（默认）：`授权工具 shell` 会立即生效。\n\
@@ -1763,6 +1767,92 @@ fn build_providers_help_response(current: &ChannelRouteSelection) -> String {
             );
         }
     }
+    response
+}
+
+fn pick_markdown_line<'a>(content: &'a str, prefix: &str) -> Option<&'a str> {
+    content
+        .lines()
+        .map(str::trim)
+        .find(|line| line.starts_with(prefix))
+}
+
+fn pick_first_unchecked_item(content: &str) -> Option<String> {
+    content
+        .lines()
+        .map(str::trim)
+        .find(|line| line.starts_with("- [ ] "))
+        .map(|line| line.trim_start_matches("- [ ] ").trim().to_string())
+}
+
+fn pick_next_action_item(content: &str) -> Option<String> {
+    let mut first_list_item: Option<String> = None;
+    for line in content.lines().map(str::trim) {
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        if line.starts_with("1)") {
+            return Some(line.trim_start_matches("1)").trim().to_string());
+        }
+        if line.starts_with("- ") && first_list_item.is_none() {
+            first_list_item = Some(line.trim_start_matches("- ").trim().to_string());
+        }
+    }
+    first_list_item
+}
+
+fn build_trigger_report_response(workspace_dir: &Path) -> String {
+    let latest_path = workspace_dir.join("LATEST_STATUS.md");
+    let next_action_path = workspace_dir.join("NEXT_ACTION.md");
+    let task_board_path = workspace_dir.join("TASK_BOARD.md");
+
+    let latest = std::fs::read_to_string(&latest_path).ok();
+    let next_action = std::fs::read_to_string(&next_action_path).ok();
+    let task_board = std::fs::read_to_string(&task_board_path).ok();
+
+    if latest
+        .as_ref()
+        .map(|s| s.trim().is_empty())
+        .unwrap_or(true)
+        && next_action
+            .as_ref()
+            .map(|s| s.trim().is_empty())
+            .unwrap_or(true)
+        && task_board
+            .as_ref()
+            .map(|s| s.trim().is_empty())
+            .unwrap_or(true)
+    {
+        return "未找到任务面板文件（LATEST_STATUS.md / NEXT_ACTION.md / TASK_BOARD.md），请先初始化控制面板。".to_string();
+    }
+
+    let mut response = String::from("已触发进度播报。\n");
+
+    if let Some(latest_text) = latest.as_deref() {
+        if let Some(line) = pick_markdown_line(latest_text, "- 时间：") {
+            let _ = writeln!(response, "{line}");
+        }
+        if let Some(line) = pick_markdown_line(latest_text, "- 当前阶段：") {
+            let _ = writeln!(response, "{line}");
+        }
+        if let Some(line) = pick_markdown_line(latest_text, "- 总体进度：") {
+            let _ = writeln!(response, "{line}");
+        }
+    }
+
+    if let Some(next_text) = next_action.as_deref() {
+        if let Some(item) = pick_next_action_item(next_text) {
+            let _ = writeln!(response, "下一步：{item}");
+        }
+    }
+
+    if let Some(board_text) = task_board.as_deref() {
+        if let Some(item) = pick_first_unchecked_item(board_text) {
+            let _ = writeln!(response, "待办优先项：{item}");
+        }
+    }
+
+    response.push_str("可再次发送 `/触发`（或 `/trigger`）刷新进度。");
     response
 }
 
@@ -1942,6 +2032,9 @@ async fn handle_runtime_command_if_needed(
         ChannelRuntimeCommand::NewSession => {
             clear_sender_history(ctx, &sender_key);
             "已清空会话历史，开始新会话。".to_string()
+        }
+        ChannelRuntimeCommand::TriggerReport => {
+            build_trigger_report_response(ctx.workspace_dir.as_path())
         }
         ChannelRuntimeCommand::RequestAllToolsOnce => {
             let req = ctx.approval_manager.create_non_cli_pending_request(
@@ -4796,6 +4889,14 @@ mod tests {
         assert_eq!(
             parse_runtime_command("slack", "/approvals"),
             Some(ChannelRuntimeCommand::ListApprovals)
+        );
+        assert_eq!(
+            parse_runtime_command("slack", "/trigger"),
+            Some(ChannelRuntimeCommand::TriggerReport)
+        );
+        assert_eq!(
+            parse_runtime_command("telegram", "/触发"),
+            Some(ChannelRuntimeCommand::TriggerReport)
         );
         assert_eq!(parse_runtime_command("slack", "/models"), None);
     }

@@ -1,0 +1,118 @@
+name: Flutter Build (Gated)
+
+on:
+  workflow_dispatch:
+    inputs:
+      feature_ready:
+        description: "Set true only after feature acceptance is complete"
+        required: true
+        default: false
+        type: boolean
+      feature_gate_file:
+        description: "Path to validated feature gate file, e.g. .ci/feature-gates/app-channel-v1.yaml"
+        required: true
+        default: ""
+        type: string
+      build_target:
+        description: "Build target"
+        required: true
+        default: web
+        type: choice
+        options:
+          - web
+
+concurrency:
+  group: flutter-build-${{ github.run_id }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  FLUTTER_CHANNEL: stable
+
+jobs:
+  feature-gate:
+    name: Feature Gate
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Validate feature gate
+        shell: bash
+        env:
+          FEATURE_READY: ${{ github.event.inputs.feature_ready || 'false' }}
+          FEATURE_GATE_FILE: ${{ github.event.inputs.feature_gate_file || '' }}
+        run: ./scripts/ci/feature_gate_guard.sh
+
+  build-web:
+    name: Build Web
+    needs: [feature-gate]
+    if: needs.feature-gate.result == 'success'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Install system deps
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends curl git ca-certificates xz-utils
+
+      - name: Install Flutter SDK (stable)
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          archive_path="$RUNNER_TEMP/flutter_release.txt"
+          python3 - <<'PY' > "$archive_path"
+          import json
+          import os
+          import urllib.request
+
+          channel = os.environ.get('FLUTTER_CHANNEL', 'stable')
+          url = 'https://storage.googleapis.com/flutter_infra_release/releases/releases_linux.json'
+          data = json.loads(urllib.request.urlopen(url).read().decode('utf-8'))
+          current_hash = data['current_release'][channel]
+          release = next(r for r in data['releases'] if r['hash'] == current_hash)
+          print(release['archive'])
+          PY
+
+          archive="$(cat "$archive_path")"
+          base_url="https://storage.googleapis.com/flutter_infra_release/releases"
+          sdk_dir="$RUNNER_TEMP/flutter-sdk"
+          mkdir -p "$sdk_dir"
+
+          echo "Downloading: ${base_url}/${archive}"
+          curl -fsSL "${base_url}/${archive}" -o "$RUNNER_TEMP/flutter.tar.xz"
+          tar -xJf "$RUNNER_TEMP/flutter.tar.xz" -C "$sdk_dir"
+
+          echo "$sdk_dir/flutter/bin" >> "$GITHUB_PATH"
+          "$sdk_dir/flutter/bin/flutter" --version
+
+      - name: Pub get
+        working-directory: apps/zeroclaw_app
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter pub get
+
+      - name: Build web (release)
+        if: ${{ github.event.inputs.build_target == 'web' }}
+        working-directory: apps/zeroclaw_app
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter build web --release
+
+      - name: Upload web artifact
+        if: ${{ github.event.inputs.build_target == 'web' }}
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: zeroclaw_app-web
+          path: apps/zeroclaw_app/build/web
+          if-no-files-found: error
+          retention-days: 14

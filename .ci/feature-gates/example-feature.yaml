@@ -1,0 +1,10 @@
+feature_id: app-channel-v1
+owner: sikuai2333
+scope:
+  - ci-trigger-gate
+  - flutter-app-shell
+  - app-channel-api
+acceptance_checked: true
+ready_for_build: true
+notes: "Feature acceptance complete; heavy CI build is allowed."
+timestamp: "2026-02-27T21:20:00+08:00"

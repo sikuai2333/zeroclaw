@@ -746,6 +746,24 @@ pub async fn run_gateway(host: &str, port: u16, config: Config) -> Result<()> {
         .route("/api/cost", get(api::handle_api_cost))
         .route("/api/cli-tools", get(api::handle_api_cli_tools))
         .route("/api/health", get(api::handle_api_health))
+        .route(
+            "/api/v1/app-channel/messages",
+            post(api::handle_api_app_channel_message),
+        )
+        .route(
+            "/api/v1/app-channel/tasks/{task_id}/progress",
+            get(api::handle_api_app_channel_task_progress),
+        )
+        .route(
+            "/api/v1/app-channel/system/metrics",
+            get(api::handle_api_app_channel_system_metrics),
+        )
+        .route(
+            "/api/v1/app-channel/stream",
+            get(api::handle_api_app_channel_stream),
+        )
+        .route("/api/app/task", get(api::handle_api_app_task))
+        .route("/api/app/chat", post(api::handle_api_app_chat))
         .route("/api/node-control", post(handle_node_control))
         // ── SSE event stream ──
         .route("/api/events", get(sse::handle_sse_events))

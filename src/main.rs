@@ -324,6 +324,13 @@ enum Commands {
         force: bool,
     },
 
+    /// 输出更新链路与初始化状态（敏感信息脱敏）
+    UpdateInfo {
+        /// 覆盖更新仓库（默认：sikuai2333/zeroclaw）
+        #[arg(long)]
+        repo: Option<String>,
+    },
+
     /// 启用、查看和恢复紧急停止（estop）状态。
     ///
     /// 示例：
@@ -1001,6 +1008,8 @@ async fn main() -> Result<()> {
             };
             update::run(options, &config)
         }
+
+        Commands::UpdateInfo { repo } => update::print_update_info(repo, &config),
 
         Commands::Estop {
             estop_command,

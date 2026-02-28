@@ -71,8 +71,10 @@ fn run_linux_update(options: UpdateOptions, config: &Config) -> Result<()> {
         .context("Failed to build HTTP client")?;
 
     println!("🔎 Checking release metadata: {release_url}");
-    let release: ReleaseResponse = client
-        .get(&release_url)
+    if let Some(source) = update_github_token_source() {
+        println!("🔐 Using GitHub API token from {source}");
+    }
+    let release: ReleaseResponse = github_api_get(&client, &release_url)
         .send()
         .context("Failed to request release metadata")?
         .error_for_status()
@@ -173,7 +175,119 @@ fn run_linux_update(options: UpdateOptions, config: &Config) -> Result<()> {
     Ok(())
 }
 
-#[cfg(target_os = "linux")]
+fn update_github_token_source() -> Option<&'static str> {
+    if std::env::var("ZEROCLAW_UPDATE_GH_TOKEN")
+        .ok()
+        .map(|v| !v.trim().is_empty())
+        .unwrap_or(false)
+    {
+        return Some("ZEROCLAW_UPDATE_GH_TOKEN");
+    }
+    if std::env::var("GH_TOKEN")
+        .ok()
+        .map(|v| !v.trim().is_empty())
+        .unwrap_or(false)
+    {
+        return Some("GH_TOKEN");
+    }
+    if std::env::var("GITHUB_TOKEN")
+        .ok()
+        .map(|v| !v.trim().is_empty())
+        .unwrap_or(false)
+    {
+        return Some("GITHUB_TOKEN");
+    }
+    None
+}
+
+fn update_github_token() -> Option<String> {
+    for key in ["ZEROCLAW_UPDATE_GH_TOKEN", "GH_TOKEN", "GITHUB_TOKEN"] {
+        if let Ok(v) = std::env::var(key) {
+            let trimmed = v.trim();
+            if !trimmed.is_empty() {
+                return Some(trimmed.to_string());
+            }
+        }
+    }
+    None
+}
+
+fn github_api_get<'a>(client: &'a Client, url: &'a str) -> reqwest::blocking::RequestBuilder {
+    let mut req = client.get(url);
+    if url.starts_with("https://api.github.com/") {
+        if let Some(token) = update_github_token() {
+            req = req.bearer_auth(token);
+        }
+    }
+    req
+}
+
+pub fn print_update_info(repo: Option<String>, config: &Config) -> Result<()> {
+    let repo = resolve_repo(repo);
+    let release_url = format!("https://api.github.com/repos/{repo}/releases/latest");
+    let release_page = format!("https://github.com/{repo}/releases/latest");
+
+    let exe_path = std::env::current_exe().context("Failed to resolve current executable path")?;
+    let current_hash = sha256_file(&exe_path)?;
+
+    let app_channel_auth_mode = if std::env::var("ZEROCLAW_APP_CHANNEL_KEY_SHA256")
+        .ok()
+        .map(|v| !v.trim().is_empty())
+        .unwrap_or(false)
+    {
+        "sha256"
+    } else if std::env::var("ZEROCLAW_APP_CHANNEL_KEY")
+        .ok()
+        .map(|v| !v.trim().is_empty())
+        .unwrap_or(false)
+    {
+        "raw"
+    } else {
+        "pairing_fallback"
+    };
+
+    println!("🔁 Update Chain");
+    println!("  Repo:                  {repo}");
+    println!("  Release API:           {release_url}");
+    println!("  Release page:          {release_page}");
+    println!("  Binary path:           {}", exe_path.display());
+    println!("  Binary sha256:         {current_hash}");
+    println!(
+        "  GitHub auth token:     {}",
+        update_github_token_source().unwrap_or("(none)")
+    );
+    println!(
+        "  Managed service found: {}",
+        if should_restart_managed_service() { "yes" } else { "no" }
+    );
+
+    println!("
+🌐 Runtime Init Snapshot");
+    println!(
+        "  Gateway bind:          {}:{}",
+        config.gateway.host, config.gateway.port
+    );
+    println!(
+        "  Pairing required:      {}",
+        if config.gateway.require_pairing { "yes" } else { "no" }
+    );
+    println!(
+        "  Public bind allowed:   {}",
+        if config.gateway.allow_public_bind { "yes" } else { "no" }
+    );
+    println!("  App channel auth:      {app_channel_auth_mode}");
+    println!(
+        "  Default provider:      {}",
+        config.default_provider.as_deref().unwrap_or("(not set)")
+    );
+    println!(
+        "  Default model:         {}",
+        config.default_model.as_deref().unwrap_or("(not set)")
+    );
+
+    Ok(())
+}
+
 fn resolve_repo(repo_arg: Option<String>) -> String {
     if let Some(repo) = repo_arg {
         let trimmed = repo.trim();
@@ -261,7 +375,6 @@ fn sha256_hex(bytes: &[u8]) -> String {
     format!("{:x}", hasher.finalize())
 }
 
-#[cfg(target_os = "linux")]
 fn sha256_file(path: &Path) -> Result<String> {
     let mut file =
         fs::File::open(path).with_context(|| format!("Failed to open {}", path.display()))?;

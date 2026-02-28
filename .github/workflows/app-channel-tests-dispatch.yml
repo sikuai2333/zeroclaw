@@ -1,0 +1,49 @@
+name: App Channel Tests (Dispatch)
+
+on:
+  workflow_dispatch:
+    inputs:
+      test_filter:
+        description: "cargo test name filter (substring). Default runs app_channel_tests subset."
+        required: false
+        default: "app_channel_tests"
+        type: string
+
+concurrency:
+  group: app-channel-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: Cargo test (subset)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7 # stable
+        with:
+          toolchain: 1.92.0
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: app-channel-tests
+
+      - name: Run app-channel tests (filtered)
+        shell: bash
+        env:
+          TEST_FILTER: ${{ github.event.inputs.test_filter || 'app_channel_tests' }}
+        run: |
+          set -euo pipefail
+          echo "Running: cargo test -p zeroclaw --locked --verbose \"${TEST_FILTER}\""
+          cargo test -p zeroclaw --locked --verbose "${TEST_FILTER}"

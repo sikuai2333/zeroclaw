@@ -1,0 +1,105 @@
+name: Flutter Lite (Format + Analyze)
+
+on:
+  workflow_dispatch:
+    inputs:
+      note:
+        description: "Manual trigger note"
+        required: false
+        default: "manual flutter-lite run"
+        type: string
+
+concurrency:
+  group: flutter-lite-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  FLUTTER_CHANNEL: stable
+
+jobs:
+  lint:
+    name: Dart/Flutter Lint
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Install system deps
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends curl git ca-certificates xz-utils
+
+      - name: Install Flutter SDK (stable)
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          python3 - <<'PY'
+          import json
+          import os
+          import urllib.request
+
+          channel = os.environ.get('FLUTTER_CHANNEL', 'stable')
+          url = 'https://storage.googleapis.com/flutter_infra_release/releases/releases_linux.json'
+          data = json.loads(urllib.request.urlopen(url).read().decode('utf-8'))
+          current_hash = data['current_release'][channel]
+          release = next(r for r in data['releases'] if r['hash'] == current_hash)
+          archive = release['archive']
+          version = release.get('version', 'unknown')
+          print(f'Using Flutter {version} ({channel})')
+          print('ARCHIVE=' + archive)
+          PY
+
+          archive_path="$RUNNER_TEMP/flutter_release.txt"
+          python3 - <<'PY' > "$archive_path"
+          import json
+          import os
+          import urllib.request
+
+          channel = os.environ.get('FLUTTER_CHANNEL', 'stable')
+          url = 'https://storage.googleapis.com/flutter_infra_release/releases/releases_linux.json'
+          data = json.loads(urllib.request.urlopen(url).read().decode('utf-8'))
+          current_hash = data['current_release'][channel]
+          release = next(r for r in data['releases'] if r['hash'] == current_hash)
+          print(release['archive'])
+          PY
+
+          archive="$(cat "$archive_path")"
+          base_url="https://storage.googleapis.com/flutter_infra_release/releases"
+          sdk_dir="$RUNNER_TEMP/flutter-sdk"
+          mkdir -p "$sdk_dir"
+
+          echo "Downloading: ${base_url}/${archive}"
+          curl -fsSL "${base_url}/${archive}" -o "$RUNNER_TEMP/flutter.tar.xz"
+          tar -xJf "$RUNNER_TEMP/flutter.tar.xz" -C "$sdk_dir"
+
+          echo "$sdk_dir/flutter/bin" >> "$GITHUB_PATH"
+          "$sdk_dir/flutter/bin/flutter" --version
+
+      - name: Pub get
+        working-directory: apps/zeroclaw_app
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter pub get
+
+      - name: Dart format (check)
+        working-directory: apps/zeroclaw_app
+        shell: bash
+        run: |
+          set -euo pipefail
+          dart format --output=none --set-exit-if-changed .
+
+      - name: Flutter analyze
+        working-directory: apps/zeroclaw_app
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter analyze

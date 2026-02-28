@@ -1,0 +1,480 @@
+openapi: 3.0.3
+info:
+  title: ZeroClaw App Channel API
+  version: 1.0.0
+  description: |
+    App Channel V1 contract for Flutter client integration.
+
+    Notes for Flutter client compatibility:
+    - HTTP requests authenticate with header `X-Channel-Key`.
+    - WebSocket on Web platform cannot set custom headers; client may pass `channel_key`
+      in query parameters when connecting to `/stream`.
+    - Stream event envelope is standardized as `{ event, ts, data }`, but some clients
+      also accept aliases `{ type }` for `event` and `{ payload }` for `data`.
+servers:
+  - url: https://{host}
+    variables:
+      host:
+        default: claw.example.com
+security:
+  - AppChannelApiKey: []
+tags:
+  - name: Channel
+  - name: Task
+  - name: System
+  - name: Stream
+paths:
+  /api/v1/app-channel/messages:
+    post:
+      tags: [Channel]
+      summary: Submit a user message to the channel
+      operationId: postChannelMessage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChannelMessageRequest'
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChannelMessageAccepted'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/app-channel/tasks/{task_id}/progress:
+    get:
+      tags: [Task]
+      summary: Get latest task progress snapshot
+      operationId: getTaskProgress
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskProgressResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/app-channel/system/metrics:
+    get:
+      tags: [System]
+      summary: Get server metrics timeseries
+      operationId: getSystemMetrics
+      parameters:
+        - name: window
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [5m, 15m, 1h, 6h, 24h]
+            default: 1h
+        - name: step_sec
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 300
+            default: 10
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemMetricsResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/app-channel/stream:
+    get:
+      tags: [Stream]
+      summary: WebSocket stream endpoint
+      description: |
+        Upgrade to WebSocket and receive realtime events.
+
+        Authentication:
+        - Preferred: header `X-Channel-Key` (IO/mobile platforms)
+        - Web fallback: query param `channel_key` (WebSocket in browsers cannot set custom headers)
+        - Optional stream cadence tuning:
+          - `progress_interval_sec` (3..60, default 5)
+          - `summary_interval_sec` (10..300, default 30)
+
+        Event envelope is defined by `StreamEventEnvelope`.
+      security:
+        - AppChannelApiKey: []
+        - AppChannelApiKeyQuery: []
+      parameters:
+        - name: channel_key
+          in: query
+          required: false
+          description: WebSocket auth fallback for Web clients.
+          schema:
+            type: string
+        - name: progress_interval_sec
+          in: query
+          required: false
+          description: Task progress push interval in seconds.
+          schema:
+            type: integer
+            minimum: 3
+            maximum: 60
+            default: 5
+        - name: summary_interval_sec
+          in: query
+          required: false
+          description: Periodic summary push interval in seconds.
+          schema:
+            type: integer
+            minimum: 10
+            maximum: 300
+            default: 30
+      responses:
+        '101':
+          description: Switching Protocols
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+components:
+  securitySchemes:
+    AppChannelApiKey:
+      type: apiKey
+      in: header
+      name: X-Channel-Key
+
+    AppChannelApiKeyQuery:
+      type: apiKey
+      in: query
+      name: channel_key
+      description: |
+        WebSocket auth fallback for Web clients. Prefer `X-Channel-Key` header when possible.
+
+  responses:
+    BadRequest:
+      description: Bad Request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Not Found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    TooManyRequests:
+      description: Too Many Requests
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    InternalError:
+      description: Internal Server Error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  schemas:
+    ChannelMessageRequest:
+      type: object
+      required: [session_id, user_id, content]
+      properties:
+        session_id:
+          type: string
+        user_id:
+          type: string
+        content:
+          type: string
+        metadata:
+          type: object
+          additionalProperties:
+            type: string
+
+    ChannelMessageAccepted:
+      type: object
+      description: |
+        Message submission acceptance.
+
+        Flutter client behavior:
+        - Reads `task_id` if present and will persist it as the active task.
+        - Tolerates missing `task_id` / `message_id` (shows a fallback message).
+      required: [accepted]
+      properties:
+        accepted:
+          type: boolean
+          example: true
+        message_id:
+          type: string
+          nullable: true
+        task_id:
+          type: string
+          nullable: true
+        queued_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    TaskCheckpoint:
+      type: object
+      required: [name, reached]
+      properties:
+        name:
+          type: string
+          example: '50%'
+        reached:
+          type: boolean
+        reached_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    TaskProgressResponse:
+      type: object
+      description: |
+        Latest task progress snapshot.
+
+        Flutter client behavior:
+        - `summary` is optional (client falls back to local default).
+        - `phase` is optional (client falls back to previous/idle).
+        - `percent` and `updated_at` are expected.
+      required: [percent, updated_at]
+      properties:
+        task_id:
+          type: string
+        percent:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 100
+        phase:
+          type: string
+        summary:
+          type: string
+        updated_at:
+          type: string
+          format: date-time
+        checkpoints:
+          type: array
+          items:
+            $ref: '#/components/schemas/TaskCheckpoint'
+
+    MetricPoint:
+      type: object
+      required: [ts, value]
+      properties:
+        ts:
+          type: string
+          format: date-time
+        value:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 100
+
+    SystemMetricsResponse:
+      type: object
+      required: [window, step_sec, cpu, ram, rom, sampled_at]
+      properties:
+        window:
+          type: string
+        step_sec:
+          type: integer
+        sampled_at:
+          type: string
+          format: date-time
+        cpu:
+          type: array
+          items:
+            $ref: '#/components/schemas/MetricPoint'
+        ram:
+          type: array
+          items:
+            $ref: '#/components/schemas/MetricPoint'
+        rom:
+          type: array
+          items:
+            $ref: '#/components/schemas/MetricPoint'
+
+    StreamChatDeltaPayload:
+      type: object
+      required: [text]
+      properties:
+        text:
+          type: string
+        status:
+          type: string
+        phase:
+          type: string
+        percent:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 100
+        next_report_in_sec:
+          type: integer
+          minimum: 1
+
+    StreamTaskSummaryPayload:
+      type: object
+      required: [summary]
+      properties:
+        summary:
+          type: string
+        status:
+          type: string
+        phase:
+          type: string
+        percent:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 100
+        kind:
+          type: string
+          enum: [periodic, final]
+        processing:
+          type: boolean
+        next_summary_in_sec:
+          type: integer
+          minimum: 1
+        failure_reason:
+          type: string
+          description: 失败场景下的简要原因摘要
+        retry_suggestion:
+          type: string
+          description: 失败场景下的重试建议
+        trigger_command:
+          type: string
+          description: 快捷触发命令（例如 `/触发`）
+
+    StreamTaskProgressPayload:
+      type: object
+      description: |
+        Realtime task snapshot pushed through WebSocket.
+
+        Flutter client behavior:
+        - `summary` is optional.
+        - `task_id` is optional but recommended.
+      required: [percent, updated_at]
+      properties:
+        task_id:
+          type: string
+        percent:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 100
+        phase:
+          type: string
+        summary:
+          type: string
+        updated_at:
+          type: string
+          format: date-time
+
+    StreamSystemMetricsPayload:
+      type: object
+      required: [cpu, ram, rom]
+      properties:
+        cpu:
+          type: array
+          items:
+            $ref: '#/components/schemas/MetricPoint'
+        ram:
+          type: array
+          items:
+            $ref: '#/components/schemas/MetricPoint'
+        rom:
+          type: array
+          items:
+            $ref: '#/components/schemas/MetricPoint'
+
+    StreamEventEnvelope:
+      description: |
+        Standard envelope: `{ event, ts, data }`.
+
+        For compatibility with existing Flutter parsing logic, servers MAY also emit:
+        - `type` as an alias of `event`
+        - `payload` as an alias of `data`
+      oneOf:
+        - type: object
+          required: [event, ts, data]
+          properties:
+            event:
+              type: string
+              enum: [chat.delta, task.progress, task.summary, system.metrics]
+            ts:
+              type: string
+              format: date-time
+            session_id:
+              type: string
+            task_id:
+              type: string
+            data:
+              oneOf:
+                - $ref: '#/components/schemas/StreamChatDeltaPayload'
+                - $ref: '#/components/schemas/StreamTaskProgressPayload'
+                - $ref: '#/components/schemas/StreamTaskSummaryPayload'
+                - $ref: '#/components/schemas/StreamSystemMetricsPayload'
+        - type: object
+          required: [type, ts, payload]
+          properties:
+            type:
+              type: string
+              enum: [chat.delta, task.progress, task.summary, system.metrics]
+            ts:
+              type: string
+              format: date-time
+            session_id:
+              type: string
+            task_id:
+              type: string
+            payload:
+              oneOf:
+                - $ref: '#/components/schemas/StreamChatDeltaPayload'
+                - $ref: '#/components/schemas/StreamTaskProgressPayload'
+                - $ref: '#/components/schemas/StreamTaskSummaryPayload'
+                - $ref: '#/components/schemas/StreamSystemMetricsPayload'
+
+    ErrorResponse:
+      type: object
+      required: [error, code]
+      properties:
+        error:
+          type: string
+        code:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
