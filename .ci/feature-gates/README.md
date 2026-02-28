@@ -14,4 +14,5 @@ Template:
 
 Example manual trigger inputs:
 - `feature_ready=true`
-- `feature_gate_file=.ci/feature-gates/app-channel-v1.yaml`
+- `feature_gate_file=.ci/feature-gates/example-feature.yaml` (safe default)
+- custom gate example: `feature_gate_file=.ci/feature-gates/app-channel-v1.yaml`

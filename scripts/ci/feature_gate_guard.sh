@@ -25,8 +25,21 @@ if [[ "$event_name" == "workflow_dispatch" ]]; then
 fi
 
 if [[ -n "$feature_gate_file" ]]; then
+  # Constrain dispatch input to the feature-gates directory and yaml files.
+  if [[ "$feature_gate_file" == *".."* ]]; then
+    echo "::error::FEATURE_GATE_FILE must not contain '..': $feature_gate_file"
+    exit 1
+  fi
+  if [[ "$feature_gate_file" != .ci/feature-gates/*.yaml ]]; then
+    echo "::error::FEATURE_GATE_FILE must match .ci/feature-gates/*.yaml, got: $feature_gate_file"
+    echo "::notice::Use safe default: .ci/feature-gates/example-feature.yaml"
+    exit 1
+  fi
+
   if [[ ! -f "$feature_gate_file" ]]; then
     echo "::error::Feature gate file not found: $feature_gate_file"
+    echo "::notice::Available gate files:"
+    ls -1 .ci/feature-gates/*.yaml 2>/dev/null || echo "(none found under .ci/feature-gates/)"
     exit 1
   fi
 

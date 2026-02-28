@@ -12,9 +12,9 @@ on:
         default: false
         type: boolean
       feature_gate_file:
-        description: "Path to validated feature gate file, e.g. .ci/feature-gates/app-channel-v1.yaml"
+        description: "Path to validated feature gate file under .ci/feature-gates/, e.g. .ci/feature-gates/app-channel-v1.yaml"
         required: true
-        default: ""
+        default: ".ci/feature-gates/example-feature.yaml"
         type: string
 
 concurrency:
