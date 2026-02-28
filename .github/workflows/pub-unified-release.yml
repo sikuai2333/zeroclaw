@@ -1,0 +1,298 @@
+name: Pub Unified Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_ref:
+        description: "Git ref to build (branch, tag, or SHA)"
+        required: false
+        default: "main"
+        type: string
+      publish_release:
+        description: "Publish GitHub Release with built assets"
+        required: false
+        default: false
+        type: boolean
+      release_tag:
+        description: "Release tag (required when publish_release=true), e.g. v0.1.9"
+        required: false
+        default: ""
+        type: string
+      prerelease:
+        description: "Mark release as prerelease"
+        required: false
+        default: false
+        type: boolean
+      rust_target:
+        description: "zeroclaw Rust target"
+        required: false
+        default: "x86_64-unknown-linux-gnu"
+        type: choice
+        options:
+          - x86_64-unknown-linux-gnu
+          - x86_64-unknown-linux-musl
+      build_flutter:
+        description: "Build Flutter app"
+        required: false
+        default: true
+        type: boolean
+      flutter_project_dir:
+        description: "Flutter project directory"
+        required: false
+        default: "apps/zeroclaw_app"
+        type: string
+      flutter_target:
+        description: "Flutter build target"
+        required: false
+        default: "linux"
+        type: choice
+        options:
+          - linux
+          - web
+          - all
+      flutter_channel:
+        description: "Flutter channel"
+        required: false
+        default: "stable"
+        type: choice
+        options:
+          - stable
+          - beta
+
+concurrency:
+  group: pub-unified-release-${{ github.event.inputs.release_ref || github.ref_name || github.run_id }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-and-publish:
+    name: Build zeroclaw + flutter
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+
+    steps:
+      - name: Resolve build context
+        id: vars
+        shell: bash
+        run: |
+          set -euo pipefail
+          release_ref="${{ github.event.inputs.release_ref ||  main }}"
+          publish_release="${{ github.event.inputs.publish_release || false }}"
+          release_tag="${{ github.event.inputs.release_tag }}"
+          prerelease="${{ github.event.inputs.prerelease || false }}"
+          rust_target="${{ github.event.inputs.rust_target || x86_64-unknown-linux-gnu }}"
+          build_flutter="${{ github.event.inputs.build_flutter || true }}"
+          flutter_project_dir="${{ github.event.inputs.flutter_project_dir || apps/zeroclaw_app }}"
+          flutter_target="${{ github.event.inputs.flutter_target || linux }}"
+          flutter_channel="${{ github.event.inputs.flutter_channel || stable }}"
+
+          if [[ "$publish_release" == "true" && -z "$release_tag" ]]; then
+            echo "::error::release_tag is required when publish_release=true"
+            exit 1
+          fi
+
+          if [[ -z "$release_tag" ]]; then
+            release_tag="dev-${GITHUB_SHA::12}"
+          fi
+
+          zeroclaw_archive="zeroclaw-${rust_target}.tar.gz"
+          zeroclaw_binary="zeroclaw-${rust_target}"
+
+          {
+            echo "release_ref=${release_ref}"
+            echo "publish_release=${publish_release}"
+            echo "release_tag=${release_tag}"
+            echo "prerelease=${prerelease}"
+            echo "rust_target=${rust_target}"
+            echo "build_flutter=${build_flutter}"
+            echo "flutter_project_dir=${flutter_project_dir}"
+            echo "flutter_target=${flutter_target}"
+            echo "flutter_channel=${flutter_channel}"
+            echo "zeroclaw_archive=${zeroclaw_archive}"
+            echo "zeroclaw_binary=${zeroclaw_binary}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ steps.vars.outputs.release_ref }}
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7 # stable
+        with:
+          toolchain: 1.92.0
+          targets: ${{ steps.vars.outputs.rust_target }}
+
+      - name: Restore Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: pub-unified-release
+
+      - name: Install cross (musl only)
+        if: ${{ steps.vars.outputs.rust_target == x86_64-unknown-linux-musl }}
+        run: cargo install cross --git https://github.com/cross-rs/cross
+
+      - name: Build zeroclaw
+        shell: bash
+        run: |
+          set -euo pipefail
+          target="${{ steps.vars.outputs.rust_target }}"
+          if [[ "$target" == "x86_64-unknown-linux-musl" ]]; then
+            cross build --profile release-fast --locked --target "$target"
+          else
+            cargo build --profile release-fast --locked --target "$target"
+          fi
+
+      - name: Package zeroclaw assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          target="${{ steps.vars.outputs.rust_target }}"
+          archive="${{ steps.vars.outputs.zeroclaw_archive }}"
+          binary="${{ steps.vars.outputs.zeroclaw_binary }}"
+          cp "target/${target}/release-fast/zeroclaw" "$binary"
+          chmod +x "$binary"
+          tar czf "$archive" -C "target/${target}/release-fast" zeroclaw
+          sha256sum "$binary" > "${binary}.sha256"
+          sha256sum "$archive" > "${archive}.sha256"
+
+      - name: Setup Flutter
+        if: ${{ steps.vars.outputs.build_flutter == true }}
+        uses: subosito/flutter-action@v2
+        with:
+          channel: ${{ steps.vars.outputs.flutter_channel }}
+          cache: true
+
+      - name: Validate Flutter project
+        if: ${{ steps.vars.outputs.build_flutter == true }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          project_dir="${{ steps.vars.outputs.flutter_project_dir }}"
+          if [[ ! -f "$project_dir/pubspec.yaml" ]]; then
+            echo "::error::Flutter project not found: $project_dir/pubspec.yaml"
+            exit 1
+          fi
+
+      - name: Flutter pub get
+        if: ${{ steps.vars.outputs.build_flutter == true }}
+        shell: bash
+        working-directory: ${{ steps.vars.outputs.flutter_project_dir }}
+        run: flutter pub get
+
+      - name: Build Flutter Linux
+        if: ${{ steps.vars.outputs.build_flutter == true && (steps.vars.outputs.flutter_target == linux || steps.vars.outputs.flutter_target == all) }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev
+
+          project_dir="${{ steps.vars.outputs.flutter_project_dir }}"
+          pushd "$project_dir" >/dev/null
+          flutter config --enable-linux-desktop
+          flutter build linux --release
+          popd >/dev/null
+
+          archive="zeroclaw-app-linux-x64.tar.gz"
+          tar czf "$archive" -C "$project_dir/build/linux/x64/release" bundle
+          sha256sum "$archive" > "${archive}.sha256"
+
+      - name: Build Flutter Web
+        if: ${{ steps.vars.outputs.build_flutter == true && (steps.vars.outputs.flutter_target == web || steps.vars.outputs.flutter_target == all) }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          project_dir="${{ steps.vars.outputs.flutter_project_dir }}"
+          pushd "$project_dir" >/dev/null
+          flutter build web --release
+          popd >/dev/null
+
+          archive="zeroclaw-app-web.tar.gz"
+          tar czf "$archive" -C "$project_dir/build" web
+          sha256sum "$archive" > "${archive}.sha256"
+
+      - name: Collect release assets
+        id: collect
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=(
+            zeroclaw-*.tar.gz
+            zeroclaw-*.tar.gz.sha256
+            zeroclaw-x86_64-unknown-linux-gnu
+            zeroclaw-x86_64-unknown-linux-gnu.sha256
+            zeroclaw-x86_64-unknown-linux-musl
+            zeroclaw-x86_64-unknown-linux-musl.sha256
+            zeroclaw-app-linux-x64.tar.gz
+            zeroclaw-app-linux-x64.tar.gz.sha256
+            zeroclaw-app-web.tar.gz
+            zeroclaw-app-web.tar.gz.sha256
+          )
+
+          uniq_files=()
+          declare -A seen
+          for f in "${files[@]}"; do
+            if [[ -f "$f" && -z "${seen[$f]:-}" ]]; then
+              uniq_files+=("$f")
+              seen[$f]=1
+            fi
+          done
+
+          if [[ ${#uniq_files[@]} -eq 0 ]]; then
+            echo "::error::No release assets produced"
+            exit 1
+          fi
+
+          printf "%s\n" "${uniq_files[@]}" > release-files.txt
+
+          {
+            echo "files<<EOF"
+            cat release-files.txt
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Upload build artifact bundle
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: unified-release-assets-${{ steps.vars.outputs.release_tag }}
+          path: ${{ steps.collect.outputs.files }}
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish GitHub Release
+        id: gh_release
+        if: ${{ steps.vars.outputs.publish_release == true }}
+        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2
+        with:
+          token: ${{ secrets.GH_RELEASE_TOKEN || github.token }}
+          tag_name: ${{ steps.vars.outputs.release_tag }}
+          target_commitish: ${{ steps.vars.outputs.release_ref }}
+          prerelease: ${{ steps.vars.outputs.prerelease == true }}
+          files: ${{ steps.collect.outputs.files }}
+
+      - name: Build summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "### Unified Release Build"
+            echo "- release_ref: \`${{ steps.vars.outputs.release_ref }}\`"
+            echo "- release_tag: \`${{ steps.vars.outputs.release_tag }}\`"
+            echo "- rust_target: \`${{ steps.vars.outputs.rust_target }}\`"
+            echo "- build_flutter: \`${{ steps.vars.outputs.build_flutter }}\`"
+            echo "- flutter_target: \`${{ steps.vars.outputs.flutter_target }}\`"
+            if [[ "${{ steps.vars.outputs.publish_release }}" == "true" ]]; then
+              echo "- release: ${{ steps.gh_release.outputs.url }}"
+            else
+              echo "- release: (not published, artifact only)"
+            fi
+            echo "- assets:"
+            sed "s/^/  - /" release-files.txt
+          } >> "$GITHUB_STEP_SUMMARY"
