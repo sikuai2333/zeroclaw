@@ -2245,6 +2245,60 @@ mod app_channel_tests {
     }
 
     #[tokio::test]
+    async fn app_channel_message_rejects_missing_session_id() {
+        let _guard = env_lock();
+        let _unset_raw = EnvVarGuard::unset("ZEROCLAW_APP_CHANNEL_KEY");
+        let _unset_sha = EnvVarGuard::unset("ZEROCLAW_APP_CHANNEL_KEY_SHA256");
+
+        reset_app_task_state_for_tests();
+        let app = app_router(build_state(false, None, 100));
+
+        let req_body = serde_json::json!({
+            "session_id": "   ",
+            "user_id": "user-1",
+            "content": "hello"
+        })
+        .to_string();
+
+        let req = Request::builder()
+            .method("POST")
+            .uri("/messages")
+            .header(header::CONTENT_TYPE, HeaderValue::from_static("application/json"))
+            .body(Body::from(req_body))
+            .expect("valid request");
+
+        let resp = app.oneshot(req).await.expect("response");
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn app_channel_message_rejects_missing_user_id() {
+        let _guard = env_lock();
+        let _unset_raw = EnvVarGuard::unset("ZEROCLAW_APP_CHANNEL_KEY");
+        let _unset_sha = EnvVarGuard::unset("ZEROCLAW_APP_CHANNEL_KEY_SHA256");
+
+        reset_app_task_state_for_tests();
+        let app = app_router(build_state(false, None, 100));
+
+        let req_body = serde_json::json!({
+            "session_id": "sess-1",
+            "user_id": "   ",
+            "content": "hello"
+        })
+        .to_string();
+
+        let req = Request::builder()
+            .method("POST")
+            .uri("/messages")
+            .header(header::CONTENT_TYPE, HeaderValue::from_static("application/json"))
+            .body(Body::from(req_body))
+            .expect("valid request");
+
+        let resp = app.oneshot(req).await.expect("response");
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
     async fn app_channel_task_progress_returns_404_for_unknown_task() {
         let _guard = env_lock();
         let _unset_raw = EnvVarGuard::unset("ZEROCLAW_APP_CHANNEL_KEY");
@@ -2531,6 +2585,188 @@ mod app_channel_tests {
 
         let resp = app.oneshot(req).await.expect("response");
         assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn app_channel_message_rejects_invalid_metadata_shape() {
+        let _guard = env_lock();
+        let _unset_raw = EnvVarGuard::unset("ZEROCLAW_APP_CHANNEL_KEY");
+        let _unset_sha = EnvVarGuard::unset("ZEROCLAW_APP_CHANNEL_KEY_SHA256");
+
+        reset_app_task_state_for_tests();
+        let app = app_router(build_state(false, None, 100));
+
+        let req_body = serde_json::json!({
+            "session_id": "sess-1",
+            "user_id": "user-1",
+            "content": "hello",
+            "metadata": {
+                "ok": "yes",
+                "bad": 123
+            }
+        })
+        .to_string();
+
+        let req = Request::builder()
+            .method("POST")
+            .uri("/messages")
+            .header(header::CONTENT_TYPE, HeaderValue::from_static("application/json"))
+            .body(Body::from(req_body))
+            .expect("valid request");
+
+        let resp = app.oneshot(req).await.expect("response");
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+
+        let body_bytes = resp.into_body().collect().await.expect("body").to_bytes();
+        let body: serde_json::Value = serde_json::from_slice(&body_bytes).expect("json");
+        assert_eq!(
+            body.get("error").and_then(serde_json::Value::as_str),
+            Some("Invalid JSON body for app-channel message")
+        );
+    }
+
+    #[tokio::test]
+    async fn app_channel_system_metrics_clamps_step_sec_boundary() {
+        let _guard = env_lock();
+        let _unset_sha = EnvVarGuard::unset("ZEROCLAW_APP_CHANNEL_KEY_SHA256");
+        let _set_raw = EnvVarGuard::set("ZEROCLAW_APP_CHANNEL_KEY", "raw_secret");
+
+        reset_app_task_state_for_tests();
+        let app = app_router(build_state(true, Some("zc_pair_token"), 100));
+
+        let low_req = Request::builder()
+            .method("GET")
+            .uri("/system/metrics?window=1h&step_sec=0")
+            .header("X-Channel-Key", HeaderValue::from_static("raw_secret"))
+            .body(Body::empty())
+            .expect("valid request");
+
+        let low_resp = app.clone().oneshot(low_req).await.expect("response");
+        assert_eq!(low_resp.status(), StatusCode::OK);
+        let low_body_bytes = low_resp.into_body().collect().await.expect("body").to_bytes();
+        let low_body: serde_json::Value = serde_json::from_slice(&low_body_bytes).expect("json");
+        assert_eq!(low_body.get("step_sec").and_then(serde_json::Value::as_u64), Some(1));
+
+        let high_req = Request::builder()
+            .method("GET")
+            .uri("/system/metrics?window=1h&step_sec=9999")
+            .header("X-Channel-Key", HeaderValue::from_static("raw_secret"))
+            .body(Body::empty())
+            .expect("valid request");
+
+        let high_resp = app.oneshot(high_req).await.expect("response");
+        assert_eq!(high_resp.status(), StatusCode::OK);
+        let high_body_bytes = high_resp.into_body().collect().await.expect("body").to_bytes();
+        let high_body: serde_json::Value = serde_json::from_slice(&high_body_bytes).expect("json");
+        assert_eq!(
+            high_body.get("step_sec").and_then(serde_json::Value::as_u64),
+            Some(300)
+        );
+    }
+
+    #[tokio::test]
+    async fn app_channel_system_metrics_invalid_window_returns_standard_error_shape() {
+        let _guard = env_lock();
+        let _unset_sha = EnvVarGuard::unset("ZEROCLAW_APP_CHANNEL_KEY_SHA256");
+        let _set_raw = EnvVarGuard::set("ZEROCLAW_APP_CHANNEL_KEY", "raw_secret");
+
+        reset_app_task_state_for_tests();
+        let app = app_router(build_state(true, Some("zc_pair_token"), 100));
+
+        let req = Request::builder()
+            .method("GET")
+            .uri("/system/metrics?window=2h")
+            .header("X-Channel-Key", HeaderValue::from_static("raw_secret"))
+            .body(Body::empty())
+            .expect("valid request");
+
+        let resp = app.oneshot(req).await.expect("response");
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+
+        let body_bytes = resp.into_body().collect().await.expect("body").to_bytes();
+        let body: serde_json::Value = serde_json::from_slice(&body_bytes).expect("json");
+        let err = body.get("error").and_then(serde_json::Value::as_str).unwrap_or("");
+        assert!(err.contains("Invalid window"));
+    }
+
+    #[tokio::test]
+    async fn app_channel_error_responses_keep_error_field_shape_consistent() {
+        let _guard = env_lock();
+        let _unset_sha = EnvVarGuard::unset("ZEROCLAW_APP_CHANNEL_KEY_SHA256");
+        let _set_raw = EnvVarGuard::set("ZEROCLAW_APP_CHANNEL_KEY", "raw_secret");
+
+        reset_app_task_state_for_tests();
+        let app = app_router(build_state(true, Some("zc_pair_token"), 100));
+
+        // 401: missing app-channel auth
+        let unauthorized_req = Request::builder()
+            .method("POST")
+            .uri("/messages")
+            .header(header::CONTENT_TYPE, HeaderValue::from_static("application/json"))
+            .body(Body::from(message_payload("hello")))
+            .expect("valid request");
+        let unauthorized_resp = app
+            .clone()
+            .oneshot(unauthorized_req)
+            .await
+            .expect("response");
+        assert_eq!(unauthorized_resp.status(), StatusCode::UNAUTHORIZED);
+        let unauthorized_body_bytes = unauthorized_resp
+            .into_body()
+            .collect()
+            .await
+            .expect("body")
+            .to_bytes();
+        let unauthorized_body: serde_json::Value =
+            serde_json::from_slice(&unauthorized_body_bytes).expect("json");
+        assert!(unauthorized_body
+            .get("error")
+            .and_then(serde_json::Value::as_str)
+            .is_some());
+
+        // 400: invalid metrics window
+        let bad_window_req = Request::builder()
+            .method("GET")
+            .uri("/system/metrics?window=oops")
+            .header("X-Channel-Key", HeaderValue::from_static("raw_secret"))
+            .body(Body::empty())
+            .expect("valid request");
+        let bad_window_resp = app.clone().oneshot(bad_window_req).await.expect("response");
+        assert_eq!(bad_window_resp.status(), StatusCode::BAD_REQUEST);
+        let bad_window_body_bytes = bad_window_resp
+            .into_body()
+            .collect()
+            .await
+            .expect("body")
+            .to_bytes();
+        let bad_window_body: serde_json::Value =
+            serde_json::from_slice(&bad_window_body_bytes).expect("json");
+        assert!(bad_window_body
+            .get("error")
+            .and_then(serde_json::Value::as_str)
+            .is_some());
+
+        // 404: unknown task progress
+        let not_found_req = Request::builder()
+            .method("GET")
+            .uri("/tasks/task-does-not-exist/progress")
+            .header("X-Channel-Key", HeaderValue::from_static("raw_secret"))
+            .body(Body::empty())
+            .expect("valid request");
+        let not_found_resp = app.oneshot(not_found_req).await.expect("response");
+        assert_eq!(not_found_resp.status(), StatusCode::NOT_FOUND);
+        let not_found_body_bytes = not_found_resp
+            .into_body()
+            .collect()
+            .await
+            .expect("body")
+            .to_bytes();
+        let not_found_body: serde_json::Value =
+            serde_json::from_slice(&not_found_body_bytes).expect("json");
+        assert!(not_found_body
+            .get("error")
+            .and_then(serde_json::Value::as_str)
+            .is_some());
     }
 
     #[tokio::test]
