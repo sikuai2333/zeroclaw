@@ -81,15 +81,24 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          release_ref="${{ github.event.inputs.release_ref ||  main }}"
-          publish_release="${{ github.event.inputs.publish_release || false }}"
+          release_ref="${{ github.event.inputs.release_ref }}"
+          publish_release="${{ github.event.inputs.publish_release }}"
           release_tag="${{ github.event.inputs.release_tag }}"
-          prerelease="${{ github.event.inputs.prerelease || false }}"
-          rust_target="${{ github.event.inputs.rust_target || x86_64-unknown-linux-gnu }}"
-          build_flutter="${{ github.event.inputs.build_flutter || true }}"
-          flutter_project_dir="${{ github.event.inputs.flutter_project_dir || apps/zeroclaw_app }}"
-          flutter_target="${{ github.event.inputs.flutter_target || linux }}"
-          flutter_channel="${{ github.event.inputs.flutter_channel || stable }}"
+          prerelease="${{ github.event.inputs.prerelease }}"
+          rust_target="${{ github.event.inputs.rust_target }}"
+          build_flutter="${{ github.event.inputs.build_flutter }}"
+          flutter_project_dir="${{ github.event.inputs.flutter_project_dir }}"
+          flutter_target="${{ github.event.inputs.flutter_target }}"
+          flutter_channel="${{ github.event.inputs.flutter_channel }}"
+
+          [[ -z "$release_ref" ]] && release_ref="main"
+          [[ -z "$publish_release" ]] && publish_release="false"
+          [[ -z "$prerelease" ]] && prerelease="false"
+          [[ -z "$rust_target" ]] && rust_target="x86_64-unknown-linux-gnu"
+          [[ -z "$build_flutter" ]] && build_flutter="true"
+          [[ -z "$flutter_project_dir" ]] && flutter_project_dir="apps/zeroclaw_app"
+          [[ -z "$flutter_target" ]] && flutter_target="linux"
+          [[ -z "$flutter_channel" ]] && flutter_channel="stable"
 
           if [[ "$publish_release" == "true" && -z "$release_tag" ]]; then
             echo "::error::release_tag is required when publish_release=true"
@@ -134,7 +143,7 @@ jobs:
           prefix-key: pub-unified-release
 
       - name: Install cross (musl only)
-        if: ${{ steps.vars.outputs.rust_target == x86_64-unknown-linux-musl }}
+        if: ${{ steps.vars.outputs.rust_target == 'x86_64-unknown-linux-musl' }}
         run: cargo install cross --git https://github.com/cross-rs/cross
 
       - name: Build zeroclaw
@@ -162,14 +171,14 @@ jobs:
           sha256sum "$archive" > "${archive}.sha256"
 
       - name: Setup Flutter
-        if: ${{ steps.vars.outputs.build_flutter == true }}
+        if: ${{ steps.vars.outputs.build_flutter == 'true' }}
         uses: subosito/flutter-action@v2
         with:
           channel: ${{ steps.vars.outputs.flutter_channel }}
           cache: true
 
       - name: Validate Flutter project
-        if: ${{ steps.vars.outputs.build_flutter == true }}
+        if: ${{ steps.vars.outputs.build_flutter == 'true' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -180,13 +189,13 @@ jobs:
           fi
 
       - name: Flutter pub get
-        if: ${{ steps.vars.outputs.build_flutter == true }}
+        if: ${{ steps.vars.outputs.build_flutter == 'true' }}
         shell: bash
         working-directory: ${{ steps.vars.outputs.flutter_project_dir }}
         run: flutter pub get
 
       - name: Build Flutter Linux
-        if: ${{ steps.vars.outputs.build_flutter == true && (steps.vars.outputs.flutter_target == linux || steps.vars.outputs.flutter_target == all) }}
+        if: ${{ steps.vars.outputs.build_flutter == 'true' && (steps.vars.outputs.flutter_target == 'linux' || steps.vars.outputs.flutter_target == 'all') }}
         shell: bash
         run: |
           set -euo pipefail
@@ -204,7 +213,7 @@ jobs:
           sha256sum "$archive" > "${archive}.sha256"
 
       - name: Build Flutter Web
-        if: ${{ steps.vars.outputs.build_flutter == true && (steps.vars.outputs.flutter_target == web || steps.vars.outputs.flutter_target == all) }}
+        if: ${{ steps.vars.outputs.build_flutter == 'true' && (steps.vars.outputs.flutter_target == 'web' || steps.vars.outputs.flutter_target == 'all') }}
         shell: bash
         run: |
           set -euo pipefail
