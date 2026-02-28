@@ -1,0 +1,62 @@
+name: CI Build (Fast)
+
+# Heavy Rust release build is gated and can only be triggered manually
+# after feature acceptance is complete.
+
+on:
+  workflow_dispatch:
+    inputs:
+      feature_ready:
+        description: "Set true only after feature acceptance is complete"
+        required: true
+        default: false
+        type: boolean
+      feature_gate_file:
+        description: "Path to validated feature gate file, e.g. .ci/feature-gates/app-channel-v1.yaml"
+        required: true
+        default: ""
+        type: string
+
+concurrency:
+  group: ci-fast-${{ github.run_id }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  feature-gate:
+    name: Feature Gate
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Validate feature gate
+        shell: bash
+        env:
+          FEATURE_READY: ${{ github.event.inputs.feature_ready || 'false' }}
+          FEATURE_GATE_FILE: ${{ github.event.inputs.feature_gate_file || '' }}
+        run: ./scripts/ci/feature_gate_guard.sh
+
+  build-fast:
+    name: Build (Fast)
+    needs: [feature-gate]
+    if: needs.feature-gate.result == 'success'
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7 # stable
+        with:
+          toolchain: 1.92.0
+
+      - uses: useblacksmith/rust-cache@f53e7f127245d2a269b3d90879ccf259876842d5 # v3
+        with:
+          prefix-key: fast-build
+          cache-targets: true
+
+      - name: Build release binary
+        run: cargo build --release --locked --verbose
