@@ -150,6 +150,11 @@ def parse_args() -> argparse.Namespace:
         help="Path to NEXT_ACTION.md (default: NEXT_ACTION.md)",
     )
     p.add_argument(
+        "--task-board",
+        default="TASK_BOARD.md",
+        help="Path to TASK_BOARD.md (default: TASK_BOARD.md)",
+    )
+    p.add_argument(
         "--write",
         action="store_true",
         help="Write/update CI_FAILURES.md (default: dry-run prints summary)",
@@ -158,6 +163,11 @@ def parse_args() -> argparse.Namespace:
         "--write-next-action",
         action="store_true",
         help="Write/update NEXT_ACTION.md with the latest CI failure follow-up action",
+    )
+    p.add_argument(
+        "--write-task-board",
+        action="store_true",
+        help="Append a CI follow-up item into TASK_BOARD.md Backlog",
     )
     p.add_argument(
         "--max-snippets",
@@ -463,6 +473,66 @@ def update_next_action(path: Path, content: str) -> None:
     path.write_text(content.rstrip() + "\n", encoding="utf-8")
 
 
+def render_task_board_entry(meta: RunMeta, root_lines: list[str]) -> str:
+    if (meta.conclusion or "").lower() == "success":
+        return textwrap.dedent(
+            f"""\
+            - [ ] [M4] 归档成功构建基线（Run ID: {meta.run_id}, Workflow: {meta.name}），补充回归对比说明。
+            """
+        ).strip()
+
+    root = (
+        root_lines[0]
+        if root_lines
+        else "未自动识别出明确 root cause，请先查看 CI_FAILURES.md 的 snippets。"
+    )
+    return textwrap.dedent(
+        f"""\
+        - [ ] [M4][CI-FIX][Run {meta.run_id}] 修复 {meta.name} 失败
+          - Root cause: `{root}`
+          - Evidence: `{meta.html_url}`
+          - Action: 本地最小复现并修复后，再进行一次受控 workflow_dispatch 复验。
+        """
+    ).strip()
+
+
+def update_task_board(path: Path, entry: str) -> None:
+    now = dt.datetime.now(dt.timezone(dt.timedelta(hours=8))).strftime("%Y-%m-%d %H:%M (+08:00)")
+    if path.exists():
+        old = path.read_text(encoding="utf-8")
+    else:
+        old = "# TASK BOARD\n\n## Backlog\n\n## Doing\n\n## Blocked\n\n## Done\n"
+
+    if "## Backlog" in old:
+        head, tail = old.split("## Backlog", 1)
+        backlog_header = "## Backlog"
+        if "## Doing" in tail:
+            backlog_body, rest = tail.split("## Doing", 1)
+            backlog_body = backlog_body.rstrip() + "\n" + entry + "\n"
+            new_content = (
+                head
+                + backlog_header
+                + backlog_body
+                + "\n## Doing"
+                + rest
+            )
+        else:
+            new_content = old.rstrip() + "\n\n" + entry + "\n"
+    else:
+        new_content = old.rstrip() + "\n\n## Backlog\n" + entry + "\n"
+
+    # best-effort update/update marker line
+    if "> Last updated:" in new_content:
+        new_content = re.sub(
+            r"> Last updated:.*",
+            f"> Last updated: {now}",
+            new_content,
+            count=1,
+        )
+
+    path.write_text(new_content.rstrip() + "\n", encoding="utf-8")
+
+
 def build_offline_meta(args: argparse.Namespace, run_id: int) -> RunMeta:
     # Prefer meta-json if provided.
     if args.meta_json:
@@ -517,7 +587,7 @@ def main() -> int:
         snippets = extract_snippets(zip_path, max_snippets=args.max_snippets, max_lines=args.max_lines)
         section = render_section(meta, snippets)
 
-        if not args.write and not args.write_next_action:
+        if not args.write and not args.write_next_action and not args.write_task_board:
             print(section)
             return 0
 
@@ -530,6 +600,10 @@ def main() -> int:
             next_action_path = Path(args.next_action)
             update_next_action(next_action_path, render_next_action(meta, root_lines))
             print(f"Updated {next_action_path}")
+        if args.write_task_board:
+            task_board_path = Path(args.task_board)
+            update_task_board(task_board_path, render_task_board_entry(meta, root_lines))
+            print(f"Updated {task_board_path}")
         if not args.write:
             print(section)
         return 0
@@ -557,7 +631,7 @@ def main() -> int:
 
     section = render_section(meta, snippets)
 
-    if not args.write and not args.write_next_action:
+    if not args.write and not args.write_next_action and not args.write_task_board:
         print(section)
         return 0
 
@@ -570,6 +644,10 @@ def main() -> int:
         next_action_path = Path(args.next_action)
         update_next_action(next_action_path, render_next_action(meta, root_lines))
         print(f"Updated {next_action_path}")
+    if args.write_task_board:
+        task_board_path = Path(args.task_board)
+        update_task_board(task_board_path, render_task_board_entry(meta, root_lines))
+        print(f"Updated {task_board_path}")
     if not args.write:
         print(section)
     return 0
